@@ -423,4 +423,36 @@ final class Sudoku {
         }
         return changed;
     }
+
+    boolean yWing() {
+        for (int p = 0; p < 81; p++) {
+            int pm = lc[p];
+            if (Integer.bitCount(pm) != 2) continue;
+            int[] peers = PEERS[p];
+            for (int a = 0; a < 20; a++) {
+                int am = lc[peers[a]];
+                if (Integer.bitCount(am) != 2 || am == pm || Integer.bitCount(am & pm) != 1) continue;
+                for (int b = a + 1; b < 20; b++) {
+                    int bm = lc[peers[b]];
+                    if (Integer.bitCount(bm) != 2 || bm == pm || Integer.bitCount(bm & pm) != 1) continue;
+                    if ((am & pm) == (bm & pm)) continue;
+                    int z = am & bm & ~pm;
+                    if (Integer.bitCount(z) != 1) continue;
+                    if (clearSeeing(z, peers[a], peers[b], -1)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean clearSeeing(int z, int c1, int c2, int c3) {
+        boolean changed = false;
+        for (int c = 0; c < 81; c++) {
+            if (c == c1 || c == c2 || c == c3 || (lc[c] & z) == 0) continue;
+            if (!sees(c, c1) || !sees(c, c2) || (c3 >= 0 && !sees(c, c3))) continue;
+            lc[c] &= ~z;
+            changed = true;
+        }
+        return changed;
+    }
 }
