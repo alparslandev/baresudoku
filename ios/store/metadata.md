@@ -10,6 +10,7 @@ Texts (name, subtitle, keywords, URLs, promotional text, description; English an
 - Pricing and Availability: Free, all territories.
 - Export compliance: `ITSAppUsesNonExemptEncryption` is false in Info.plist, no question is asked.
 - Advertising identifier: not used.
+- visionOS only: the High Motion label (`hasHighMotionLabel`) is required for submission but not exposed by the API (spec 4.5); answer "No" on the visionOS version page before running `submit`.
 
 ## Screenshots (this folder)
 
