@@ -25,6 +25,7 @@ printf '{"images":[{"filename":"icon.png","idiom":"universal","platform":"ios","
 xcrun actool --app-icon AppIcon --output-partial-info-plist "$OUT/icon/partial.plist" --platform $PLATFORM --minimum-deployment-target 15.0 \
   --target-device iphone --optimization space --compress-pngs --compile "$APP" "$OUT/icon/A.xcassets" > "$OUT/actool.log" 2>&1
 plutil -convert binary1 -o "$APP/Info.plist" Info.plist
+/usr/libexec/PlistBuddy -c "Add :UIDeviceFamily array" -c "Add :UIDeviceFamily:0 integer 1" -c "Add :UIDeviceFamily:1 integer 2" "$APP/Info.plist"
 printf 'APPL????' > "$APP/PkgInfo"
 if [ "$MODE" = sim ]; then
   codesign -s - -f "$APP" > /dev/null 2>&1

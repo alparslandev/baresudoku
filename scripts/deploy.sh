@@ -5,7 +5,7 @@ ROOT=$(pwd)
 WEB="${BARESUDOKU_WEB:-$ROOT/../baresudoku-web}"
 ASC="$HOME/.baresudoku/asc.json"
 PLAY="$HOME/.baresudoku/play.json"
-PLATFORMS="${PLATFORMS:-ios}"
+PLATFORMS="${PLATFORMS:-ios mac tv vision}"
 STEP=""
 step() { STEP="$1"; printf '\n== %s\n' "$1"; }
 trap 'test $? -eq 0 || printf "\nBasarisiz adim: %s\n" "$STEP"' EXIT

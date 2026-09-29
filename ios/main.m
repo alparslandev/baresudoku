@@ -818,34 +818,39 @@ static BoardView *current;
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
 }
 
-#if TARGET_OS_MACCATALYST
-- (void)logFrame {
-    if (@available(macCatalyst 16.0, *)) {
-        CGRect f = self.window.windowScene.effectiveGeometry.systemFrame;
-        NSLog(@"frame %.0f %.0f %.0f %.0f", f.origin.x, f.origin.y, f.size.width, f.size.height);
-    }
+- (void)snapshot:(NSString *)name {
+    const char *dir = getenv("BARESUDOKU_SHOTS");
+    if (!dir) return;
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.scale = self.traitCollection.displayScale;
+    format.opaque = YES;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:self.bounds.size format:format];
+    NSData *png = [renderer PNGDataWithActions:^(UIGraphicsImageRendererContext *context) { [self drawRect:self.bounds]; }];
+    [png writeToFile:[NSString stringWithFormat:@"%s/%@.png", dir, name] atomically:YES];
 }
-#endif
 
 - (void)demo:(NSNumber *)stepNumber {
     int step = stepNumber.intValue;
     int given = 0;
     while (given < 80 && game.given[given] == 0) given++;
     CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
-    if (step == 0) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:2] + menuRowH / 2)]; }
+    if (step == 0) { self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight; [self applyTheme]; [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:2] + menuRowH / 2)]; }
     else if (step <= 12) [self press:hint];
-    else if (step == 13) [self press:[self cellPoint:given]];
+    else if (step == 13) { [self press:[self cellPoint:given]]; [self snapshot:@"1-board"]; }
     else if (step == 14) {
         demoDigit = 1;
         for (int d = 2; d <= 9; d++) if (game_remaining(&game, d) > game_remaining(&game, demoDigit)) demoDigit = d;
         [self press:[self cellPoint:given]];
         [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)];
+        [self snapshot:@"2-lock"];
     }
-    else if (step == 15) { [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)]; [self press:hint]; }
-    else if (step == 16) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)];
+    else if (step == 15) { [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)]; [self press:hint]; [self snapshot:@"3-hint"]; }
+    else if (step == 16) { [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)]; [self snapshot:@"4-menu"]; }
     else if (step == 17) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:6] + menuRowH / 2)]; }
-    NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d", step, game.selected, game.sticky, game.hintKind, menuOpen);
-    if (step < 17) [self performSelector:@selector(demo:) withObject:@(step + 1) afterDelay:1.5];
+    else if (step == 18) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    else if (step == 19) { [self applyTheme]; [self snapshot:@"5-dark"]; }
+    NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d size=%.0fx%.0f", step, game.selected, game.sticky, game.hintKind, menuOpen, self.bounds.size.width, self.bounds.size.height);
+    if (step < 19) [self performSelector:@selector(demo:) withObject:@(step + 1) afterDelay:1.5];
 }
 #endif
 
@@ -881,16 +886,12 @@ static BoardView *current;
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.window.rootViewController = [BoardController new];
     [self.window makeKeyAndVisible];
-#ifdef SELFTEST
-    if (getenv("BARESUDOKU_DARK")) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
-#if TARGET_OS_MACCATALYST
+#if defined(SELFTEST) && TARGET_OS_MACCATALYST
     UIWindowScene *ws = (UIWindowScene *)scene;
     ws.titlebar.titleVisibility = UITitlebarTitleVisibilityHidden;
     ws.titlebar.toolbar = nil;
-    if (@available(macCatalyst 16.0, *)) {
-        [ws requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesMac alloc] initWithSystemFrame:CGRectMake(0, 0, 1280, 828)] errorHandler:nil];
-    }
-#endif
+    ws.sizeRestrictions.minimumSize = CGSizeMake(1280, 800);
+    ws.sizeRestrictions.maximumSize = CGSizeMake(1280, 800);
 #endif
 }
 - (void)sceneDidBecomeActive:(UIScene *)scene {
@@ -902,9 +903,6 @@ static BoardView *current;
         SEL run = strcmp(getenv("BARESUDOKU_SELFTEST"), "demo") == 0 ? @selector(demo:) : @selector(selftest:);
         [current performSelector:run withObject:@0 afterDelay:1.5];
     }
-#if TARGET_OS_MACCATALYST
-    [current performSelector:@selector(logFrame) withObject:nil afterDelay:1.0];
-#endif
 #endif
 }
 - (void)sceneWillResignActive:(UIScene *)scene {
