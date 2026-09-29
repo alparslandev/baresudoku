@@ -48,5 +48,25 @@ public class MainActivity extends Activity implements Runnable {
     }
 
     public void run() {
+        Sudoku worker = new Sudoku();
+        int level = pendingLevel;
+        int[] puzzle = worker.generate(level);
+        synchronized (game) {
+            game.start(puzzle, worker.solution, level);
+        }
+        save();
+        pendingLevel = -1;
+        BoardView v = current;
+        if (v != null) v.postInvalidate();
+    }
+
+    void generate(int level) {
+        if (pendingLevel >= 0) return;
+        pendingLevel = level;
+        new Thread(this).start();
+    }
+
+    public void onBackPressed() {
+        if (!view.back()) super.onBackPressed();
     }
 }

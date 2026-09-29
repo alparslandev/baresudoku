@@ -139,6 +139,8 @@ final class BoardView extends View implements Runnable {
             cDim = 0x66000000;
             cAccent = 0xFF1A73E8;
         }
+        menuOpen = !game.active && MainActivity.pendingLevel < 0;
+        wasGenerating = MainActivity.pendingLevel >= 0;
     }
 
     static String clock(long ms) {
@@ -212,10 +214,22 @@ final class BoardView extends View implements Runnable {
 
     protected void onDraw(Canvas c) {
         c.drawColor(cBg);
-        if (game.active) drawBoard(c);
+        boolean generating = MainActivity.pendingLevel >= 0;
+        if (wasGenerating && !generating) {
+            wasGenerating = false;
+            game.resume(SystemClock.elapsedRealtime());
+            run();
+        }
+        drawTop(c, generating);
+        if (generating) {
+            drawText(c, text[S_PREPARING], boardX + boardSize / 2, boardY + boardSize / 2, cell * 0.55f, cMuted, Typeface.DEFAULT);
+        } else if (game.active) {
+            drawBoard(c);
+        }
         drawMessage(c);
         drawTools(c);
         drawKeys(c);
+        if (overlay()) drawMenu(c);
     }
 
     private void drawBoard(Canvas c) {
@@ -292,7 +306,19 @@ final class BoardView extends View implements Runnable {
 
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
-        int t = target(e.getX(), e.getY());
+        float x = e.getX();
+        float y = e.getY();
+        if (overlay()) {
+            if (action == MotionEvent.ACTION_DOWN) {
+                downTarget = menuTarget(x, y);
+            } else if (action == MotionEvent.ACTION_UP) {
+                if (menuTarget(x, y) == downTarget) menuAction(downTarget);
+                downTarget = -1;
+            }
+            return true;
+        }
+        if (MainActivity.pendingLevel >= 0) return true;
+        int t = target(x, y);
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
             if (t >= 0 && t < 81) {
                 if (action == MotionEvent.ACTION_DOWN) downTarget = -1;
@@ -320,6 +346,10 @@ final class BoardView extends View implements Runnable {
         else if (t == 202) game.noteMode = !game.noteMode;
         else if (t == 203) changed = game.fillNotes();
         else if (t == 204) changed = game.hint(MainActivity.engine);
+        else if (t == 300) {
+            openMenu();
+            return;
+        }
         if (game.solved) {
             game.pause(SystemClock.elapsedRealtime());
             removeCallbacks(this);
@@ -433,5 +463,144 @@ final class BoardView extends View implements Runnable {
             String label = text[S_UNDO + i];
             drawText(c, label, x + toolW / 2, toolY + toolH * 0.78f, fit(label, toolH * 0.17f, toolW * 0.88f), color, Typeface.DEFAULT);
         }
+    }
+
+    boolean wasGenerating;
+    float menuX;
+    float menuW;
+    float menuTop;
+    float menuRowH;
+    float menuTitleH;
+    int menuRows;
+
+    private boolean overlay() {
+        return menuOpen || (game.active && game.solved);
+    }
+
+    private boolean cancellable() {
+        return game.active && !game.solved;
+    }
+
+    private float width(String s, float size, Typeface face) {
+        paint.setTextSize(size);
+        paint.setTypeface(face);
+        return paint.measureText(s);
+    }
+
+    private void drawTop(Canvas c, boolean generating) {
+        int level = generating ? MainActivity.pendingLevel : game.active ? game.level : -1;
+        float size = topH * 0.42f;
+        float cy = topY + topH / 2;
+        if (level >= 0) {
+            String s = text[level];
+            drawText(c, s, topX + topH * 0.2f + width(s, size, Typeface.DEFAULT_BOLD) / 2, cy, size, cKeyText, Typeface.DEFAULT_BOLD);
+        }
+        if (game.active && !generating) {
+            drawText(c, clock(game.time(SystemClock.elapsedRealtime())), topX + topW / 2, cy, size, cMuted, Typeface.MONOSPACE);
+        }
+        float mx = topX + topW - topH * 0.45f;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(topH * 0.07f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setColor(cKeyText);
+        for (int k = -1; k <= 1; k++) {
+            c.drawLine(mx - topH * 0.22f, cy + k * topH * 0.17f, mx + topH * 0.22f, cy + k * topH * 0.17f, paint);
+        }
+    }
+
+    private void layoutMenu(int w, int h) {
+        float base = Math.min(w - insetL - insetR, h - insetT - insetB);
+        menuW = base * 0.82f;
+        menuRowH = base * 0.105f;
+        boolean solved = game.active && game.solved;
+        menuTitleH = menuRowH * (solved ? 2.2f : 1.6f);
+        menuRows = cancellable() ? 6 : 5;
+        float total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4f;
+        menuX = insetL + (w - insetL - insetR - menuW) / 2;
+        menuTop = insetT + (h - insetT - insetB - total) / 2;
+    }
+
+    private float menuRowY(int row) {
+        return menuTop + menuTitleH + row * menuRowH;
+    }
+
+    private void drawMenu(Canvas c) {
+        c.drawColor(cDim);
+        layoutMenu(getWidth(), getHeight());
+        float bottom = menuRowY(menuRows) + menuRowH * 0.4f;
+        fillRect(c, menuX, menuTop, menuX + menuW, bottom, cPanel, menuRowH * 0.3f);
+        boolean solved = game.active && game.solved;
+        float cx = menuX + menuW / 2;
+        float y = menuTop + menuRowH * 0.7f;
+        drawText(c, text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5f, cKeyText, Typeface.DEFAULT_BOLD);
+        y += menuRowH * 0.6f;
+        if (solved) {
+            drawText(c, text[game.level] + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
+            y += menuRowH * 0.6f;
+        }
+        drawText(c, text[S_NEW], cx, y, menuRowH * 0.34f, cMuted, Typeface.DEFAULT);
+        float side = menuRowH * 0.4f;
+        float inset = menuRowH * 0.08f;
+        for (int row = 0; row < menuRows; row++) {
+            float ry = menuRowY(row);
+            String label = row < 4 ? text[row] : row == 4 ? text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF] : text[S_CANCEL];
+            fillRect(c, menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25f);
+            drawText(c, label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4f, menuW * 0.8f), cKeyText, Typeface.DEFAULT);
+        }
+    }
+
+    private int menuTarget(float x, float y) {
+        layoutMenu(getWidth(), getHeight());
+        float bottom = menuRowY(menuRows) + menuRowH * 0.4f;
+        if (x < menuX || x > menuX + menuW || y < menuTop || y > bottom) return 499;
+        for (int row = 0; row < menuRows; row++) {
+            float ry = menuRowY(row);
+            if (y >= ry && y < ry + menuRowH) return 400 + row;
+        }
+        return -1;
+    }
+
+    private void menuAction(int t) {
+        if (t >= 400 && t < 404) {
+            startGame(t - 400);
+        } else if (t == 404) {
+            game.showErrors = !game.showErrors;
+            MainActivity.save();
+            invalidate();
+        } else if ((t == 405 || t == 499) && cancellable()) {
+            closeMenu();
+        }
+    }
+
+    private void startGame(int level) {
+        if (MainActivity.pendingLevel >= 0) return;
+        menuOpen = false;
+        game.pause(SystemClock.elapsedRealtime());
+        removeCallbacks(this);
+        wasGenerating = true;
+        host.generate(level);
+        invalidate();
+    }
+
+    private void openMenu() {
+        menuOpen = true;
+        game.pause(SystemClock.elapsedRealtime());
+        removeCallbacks(this);
+        invalidate();
+    }
+
+    private void closeMenu() {
+        menuOpen = false;
+        game.resume(SystemClock.elapsedRealtime());
+        run();
+        invalidate();
+    }
+
+    boolean back() {
+        if (menuOpen && cancellable()) {
+            closeMenu();
+            return true;
+        }
+        return false;
     }
 }
