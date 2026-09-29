@@ -101,7 +101,7 @@ async function submit(version, build, platform) {
   await api("PATCH", `/appStoreVersions/${vid}/relationships/build`, { data: { type: "builds", id: buildId } });
   const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
   await appInfo(app, listing);
-  await setVersionAttributes(vid, platform, listing);
+  await setCopyright(vid, listing);
   await reviewDetail(vid, listing);
   if ((await versions(app, platform)).some(v => LIVE.has(state(v)) && v.id !== vid)) await setWhatsNew(vid);
   const open = (await api("GET", `/reviewSubmissions?filter[app]=${app}&filter[platform]=${platform}&filter[state]=READY_FOR_REVIEW`)).data[0];
@@ -197,9 +197,8 @@ async function appInfo(app, listing) {
   });
 }
 
-async function setVersionAttributes(vid, platform, listing) {
-  const attributes = { copyright: listing.copyright, ...(platform === "VISION_OS" ? { hasHighMotionLabel: false } : {}) };
-  await api("PATCH", `/appStoreVersions/${vid}`, { data: { type: "appStoreVersions", id: vid, attributes } });
+async function setCopyright(vid, listing) {
+  await api("PATCH", `/appStoreVersions/${vid}`, { data: { type: "appStoreVersions", id: vid, attributes: { copyright: listing.copyright } } });
 }
 
 async function reviewDetail(vid, listing) {
@@ -226,7 +225,7 @@ async function metadata(version, platform) {
   await api("PATCH", `/apps/${app}`, { data: { type: "apps", id: app, attributes: { contentRightsDeclaration: "DOES_NOT_USE_THIRD_PARTY_CONTENT" } } });
   await appInfo(app, listing);
   const vid = await versionFor(app, platform, version);
-  await setVersionAttributes(vid, platform, listing);
+  await setCopyright(vid, listing);
   const locs = await localizations(vid);
   for (const [locale, l] of Object.entries(listing.locales)) {
     const attributes = { description: l.description, keywords: l.keywords, supportUrl: l.supportUrl, marketingUrl: l.marketingUrl, promotionalText: l.promotionalText };
