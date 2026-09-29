@@ -455,4 +455,12 @@ final class Sudoku {
         }
         return changed;
     }
+
+    boolean swordfish() {
+        return fish(3);
+    }
+
+    boolean xWing() {
+        return fish(2);
+    }
 }
