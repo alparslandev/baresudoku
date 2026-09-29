@@ -99,6 +99,10 @@ async function submit(version, build, platform) {
   const buildId = await waitBuild(app, platform, version, build);
   const vid = await versionFor(app, platform, version);
   await api("PATCH", `/appStoreVersions/${vid}/relationships/build`, { data: { type: "builds", id: buildId } });
+  const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
+  await appInfo(app, listing);
+  await setCopyright(vid, listing);
+  await reviewDetail(vid, listing);
   if ((await versions(app, platform)).some(v => LIVE.has(state(v)) && v.id !== vid)) await setWhatsNew(vid);
   const open = (await api("GET", `/reviewSubmissions?filter[app]=${app}&filter[platform]=${platform}&filter[state]=READY_FOR_REVIEW`)).data[0];
   const sub = open ? open.id : (await api("POST", "/reviewSubmissions", {
@@ -169,7 +173,7 @@ async function appInfo(app, listing) {
   });
   const infoLocs = (await api("GET", `/appInfos/${info.id}/appInfoLocalizations`)).data;
   for (const [locale, l] of Object.entries(listing.locales)) {
-    const attributes = { name: l.name, subtitle: l.subtitle, privacyPolicyUrl: l.privacyPolicyUrl };
+    const attributes = { name: l.name, subtitle: l.subtitle, privacyPolicyUrl: l.privacyPolicyUrl, privacyPolicyText: l.privacyPolicyText };
     const existing = infoLocs.find(x => x.attributes.locale === locale);
     if (existing) await api("PATCH", `/appInfoLocalizations/${existing.id}`, { data: { type: "appInfoLocalizations", id: existing.id, attributes } });
     else await api("POST", "/appInfoLocalizations", { data: { type: "appInfoLocalizations", attributes: { locale, ...attributes }, relationships: { appInfo: { data: { type: "appInfos", id: info.id } } } } });
@@ -191,6 +195,10 @@ async function appInfo(app, listing) {
       },
     },
   });
+}
+
+async function setCopyright(vid, listing) {
+  await api("PATCH", `/appStoreVersions/${vid}`, { data: { type: "appStoreVersions", id: vid, attributes: { copyright: listing.copyright } } });
 }
 
 async function reviewDetail(vid, listing) {
@@ -217,6 +225,7 @@ async function metadata(version, platform) {
   await api("PATCH", `/apps/${app}`, { data: { type: "apps", id: app, attributes: { contentRightsDeclaration: "DOES_NOT_USE_THIRD_PARTY_CONTENT" } } });
   await appInfo(app, listing);
   const vid = await versionFor(app, platform, version);
+  await setCopyright(vid, listing);
   const locs = await localizations(vid);
   for (const [locale, l] of Object.entries(listing.locales)) {
     const attributes = { description: l.description, keywords: l.keywords, supportUrl: l.supportUrl, marketingUrl: l.marketingUrl, promotionalText: l.promotionalText };
