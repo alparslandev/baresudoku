@@ -30,6 +30,7 @@ final class SudokuTest {
                 LEVELS[level], n, clues / (double) n, ms / (double) n, Arrays.toString(techniques));
         }
         gameTests(engine);
+        stickyTests(engine);
         System.out.println(failures == 0 ? "TAMAM" : "HATA: " + failures);
         if (failures != 0) System.exit(1);
     }
@@ -130,6 +131,52 @@ final class SudokuTest {
         check(g.solved && g.selected == Game.NONE, "cozuldu isareti yok");
         check(!g.enter(1) && !g.undo(), "cozulmus oyunda hamle yapildi");
         System.out.println("Oyun durumu testleri gecti");
+    }
+
+    static void stickyTests(Sudoku e) {
+        int[] puzzle = e.generate(0);
+        Game g = new Game();
+        g.start(puzzle, e.solution, 0);
+        int a = firstEmpty(puzzle);
+        int b = a + 1;
+        while (puzzle[b] != 0) b++;
+        int d = e.solution[a];
+        int other = d == 9 ? 1 : d + 1;
+        check(!g.key(d) && g.sticky == d, "secim yokken tus kilitlemedi");
+        check(g.tap(a) && g.value[a] == d && g.selected == a, "kilitli rakam hucreye yazilmadi");
+        check(g.tap(a) && g.value[a] == 0 && g.sticky == d, "ayni hucreye ikinci dokunus silmedi");
+        check(g.tap(b) && g.value[b] == d, "ikinci hucreye yazilmadi");
+        check(!g.key(d) && g.sticky == 0 && g.value[b] == d, "tusa tekrar basinca kilit acilmadi");
+        check(g.undo() && g.value[b] == 0, "kilitli yazim geri alinamadi");
+        g.select(a);
+        check(g.key(d) && g.value[a] == d && g.sticky == 0, "secili hucreye tusla yazilmadi");
+        check(!g.key(d) && g.sticky == d && g.value[a] == d, "ayni tusa ikinci basis kilitlemedi");
+        check(!g.key(other) && g.sticky == other && g.value[a] == d, "kilitliyken baska tus degistirmedi");
+        check(!g.key(other) && g.sticky == 0, "kilit acilmadi");
+        check(!g.tap(a) && g.selected == Game.NONE, "secili hucreye dokununca secim kalkmadi");
+        int given = 0;
+        while (puzzle[given] == 0) given++;
+        check(!g.tap(given) && g.selected == given, "verilen hucre secilmedi");
+        check(!g.key(other) && g.sticky == other, "verilen hucre seciliyken tus kilitlemedi");
+        check(!g.tap(given) && g.value[given] == puzzle[given], "verilen hucre degisti");
+        g.noteMode = true;
+        check(g.tap(b) && g.notes[b] == Sudoku.bit(other), "kilitli rakam not olarak yazilmadi");
+        check(g.tap(b) && g.notes[b] == 0, "kilitli not kapanmadi");
+        g.noteMode = false;
+        check(!g.key(other) && g.sticky == 0, "kilit acilmadi");
+        g.select(Game.NONE);
+        check(!g.key(d) && g.sticky == d, "tekrar kilitlenmedi");
+        for (int i = 0; i < 81; i++) if (g.value[i] == 0 && e.solution[i] == d) check(g.tap(i), "rakam tamamlanirken yazilamadi");
+        check(g.remaining(d) == 0 && g.sticky == 0, "rakam tamamlaninca kilit acilmadi");
+        check(!g.key(d) && g.sticky == 0, "tamamlanan rakam kilitlendi");
+        for (int i = 0; i < 81; i++) {
+            if (g.value[i] != 0) continue;
+            g.sticky = e.solution[i];
+            check(g.tap(i), "cozum kilitli yazilamadi");
+        }
+        check(g.solved && g.sticky == 0, "cozulunce kilit acilmadi");
+        check(!g.tap(a) && !g.key(d) && g.sticky == 0, "cozulmus oyunda kilit calisti");
+        System.out.println("Rakam once testleri gecti");
     }
 
     static int firstEmpty(int[] values) {
