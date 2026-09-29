@@ -132,4 +132,15 @@ final class Game {
     long time(long now) {
         return elapsed + (runningSince == 0 ? 0 : now - runningSince);
     }
+
+    boolean undo() {
+        if (!active || solved || history.isEmpty()) return false;
+        int[] r = history.remove(history.size() - 1);
+        for (int i = 0; i < r.length; i += 3) {
+            value[r[i]] = r[i + 1];
+            notes[r[i]] = r[i + 2];
+        }
+        selected = r[0];
+        return true;
+    }
 }
