@@ -18,6 +18,7 @@ final class Game {
     boolean showErrors = true;
     int level;
     int selected = NONE;
+    int sticky;
     long elapsed;
     long runningSince;
 
@@ -33,6 +34,7 @@ final class Game {
         noteMode = false;
         level = newLevel;
         selected = NONE;
+        sticky = 0;
         elapsed = 0;
         running = false;
         hintKind = HINT_NONE;
@@ -71,7 +73,24 @@ final class Game {
         }
         commit();
         checkSolved();
+        if (sticky != 0 && (solved || remaining(sticky) <= 0)) sticky = 0;
         return true;
+    }
+
+    boolean key(int d) {
+        if (sticky == 0 && canEdit() && (noteMode ? value[selected] == 0 : value[selected] != d)) return enter(d);
+        sticky = sticky == d || remaining(d) <= 0 ? 0 : d;
+        return false;
+    }
+
+    boolean tap(int cell) {
+        if (!active || solved) return false;
+        if (sticky == 0) {
+            selected = cell == selected ? NONE : cell;
+            return false;
+        }
+        selected = cell;
+        return enter(sticky);
     }
 
     boolean erase() {
