@@ -25,14 +25,18 @@ final class Game {
     void start(int[] puzzle, int[] full, int newLevel) {
         System.arraycopy(puzzle, 0, given, 0, 81);
         System.arraycopy(full, 0, solution, 0, 81);
-        System.arraycopy(puzzle, 0, value, 0, 81);
+        level = newLevel;
+        active = true;
+        restart();
+    }
+
+    void restart() {
+        System.arraycopy(given, 0, value, 0, 81);
         Arrays.fill(notes, 0);
         history.clear();
         recordLength = 0;
-        active = true;
         solved = false;
         noteMode = false;
-        level = newLevel;
         selected = NONE;
         sticky = 0;
         elapsed = 0;
@@ -175,6 +179,13 @@ final class Game {
             if (notes[i] != m) {
                 touch(i);
                 notes[i] = m;
+            }
+        }
+        if (commit()) return true;
+        for (int i = 0; i < 81; i++) {
+            if (value[i] == 0 && notes[i] != 0) {
+                touch(i);
+                notes[i] = 0;
             }
         }
         return commit();

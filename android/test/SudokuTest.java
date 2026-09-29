@@ -103,7 +103,9 @@ final class SudokuTest {
         for (int i = 0; i < 81; i++) {
             if (g.value[i] == 0) check(g.notes[i] == Sudoku.candidates(g.value, i), "not adaylari yanlis");
         }
-        check(!g.fillNotes(), "degismeyen not doldurma hamle sayildi");
+        check(g.fillNotes(), "dolu notlar temizlenmedi");
+        for (int i = 0; i < 81; i++) check(g.notes[i] == 0, "notlar temizlenmedi");
+        check(g.fillNotes(), "notlar tekrar dolmadi");
         check(g.hint(e) && g.hintActive() && g.hintKind == Game.HINT_PLACE, "yerlestirme ipucusu gelmedi");
         int hc = g.hintCell;
         int hd = g.hintDigit;
@@ -130,6 +132,11 @@ final class SudokuTest {
         }
         check(g.solved && g.selected == Game.NONE, "cozuldu isareti yok");
         check(!g.enter(1) && !g.undo(), "cozulmus oyunda hamle yapildi");
+        g.restart();
+        check(!g.solved && g.history.isEmpty() && g.selected == Game.NONE && g.elapsed == 0 && Arrays.equals(g.value, g.given), "bastan baslatma sifirlamadi");
+        for (int i = 0; i < 81; i++) check(g.notes[i] == 0, "bastan baslatma notlari silmedi");
+        g.select(cell);
+        check(g.enter(right) && g.value[cell] == right, "bastan baslatilan oyunda hamle yapilamadi");
         System.out.println("Oyun durumu testleri gecti");
     }
 

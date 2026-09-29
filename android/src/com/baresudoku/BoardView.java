@@ -35,16 +35,17 @@ final class BoardView extends View implements Runnable {
     static final int S_AGAIN = 21;
     static final int S_TECH = 22;
     static final int S_TITLE = 28;
+    static final int S_RESTART = 29;
     static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
         "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
         "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
         "Only place for # in this box", "Tap hint again to place it", "Locked candidates", "Pair or triple",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Restart"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
         "Bu kutuda # için tek yer", "Yerleştirmek için ipucuna tekrar bas", "Kilitli adaylar", "Çift veya üçlü",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Baştan başla"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -545,7 +546,7 @@ final class BoardView extends View implements Runnable {
         menuRowH = base * 0.105f;
         boolean solved = game.active && game.solved;
         menuTitleH = menuRowH * (solved ? 2.2f : 1.6f);
-        menuRows = cancellable() ? 6 : 5;
+        menuRows = cancellable() ? 7 : 5;
         float total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4f;
         menuX = insetL + (w - insetL - insetR - menuW) / 2;
         menuTop = insetT + (h - insetT - insetB - total) / 2;
@@ -574,7 +575,7 @@ final class BoardView extends View implements Runnable {
         float inset = menuRowH * 0.08f;
         for (int row = 0; row < menuRows; row++) {
             float ry = menuRowY(row);
-            String label = row < 4 ? text[row] : row == 4 ? text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF] : text[S_CANCEL];
+            String label = row < 4 ? text[row] : row == 4 ? text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF] : row == 5 ? text[S_RESTART] : text[S_CANCEL];
             fillRect(c, menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25f);
             drawText(c, label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4f, menuW * 0.8f), cKeyText, Typeface.DEFAULT);
         }
@@ -598,7 +599,11 @@ final class BoardView extends View implements Runnable {
             game.showErrors = !game.showErrors;
             MainActivity.save();
             invalidate();
-        } else if ((t == 405 || t == 499) && cancellable()) {
+        } else if (t == 405 && cancellable()) {
+            game.restart();
+            MainActivity.save();
+            closeMenu();
+        } else if ((t == 406 || t == 499) && cancellable()) {
             closeMenu();
         }
     }
