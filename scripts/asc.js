@@ -11,9 +11,10 @@ const FALLBACK_TYPE = { APP_IPHONE_69: "APP_IPHONE_67" };
 const b64 = s => Buffer.from(s).toString("base64url");
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let cfg;
+const config = () => (cfg ||= JSON.parse(readFileSync(`${process.env.HOME}/.baresudoku/asc.json`, "utf8")));
 
 function token() {
-  cfg ||= JSON.parse(readFileSync(`${process.env.HOME}/.baresudoku/asc.json`, "utf8"));
+  config();
   const now = Math.floor(Date.now() / 1000);
   const header = b64(JSON.stringify({ alg: "ES256", kid: cfg.keyId, typ: "JWT" }));
   const claims = b64(JSON.stringify({ iss: cfg.issuerId, iat: now, exp: now + 1200, aud: "appstoreconnect-v1" }));
@@ -192,6 +193,24 @@ async function appInfo(app, listing) {
   });
 }
 
+async function reviewDetail(vid, listing) {
+  const contact = config().review;
+  if (!contact) { console.log("Inceleme iletisim bilgisi yok (~/.baresudoku/asc.json review), atlandi"); return; }
+  const attributes = {
+    contactFirstName: contact.firstName, contactLastName: contact.lastName, contactPhone: contact.phone, contactEmail: contact.email,
+    demoAccountRequired: false, notes: listing.reviewNotes,
+  };
+  const existing = (await api("GET", `/appStoreVersions/${vid}/appStoreReviewDetail`)).data;
+  if (existing) await api("PATCH", `/appStoreReviewDetails/${existing.id}`, { data: { type: "appStoreReviewDetails", id: existing.id, attributes } });
+  else await api("POST", "/appStoreReviewDetails", { data: { type: "appStoreReviewDetails", attributes, relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: vid } } } } });
+}
+
+async function review(version, platform) {
+  const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
+  await reviewDetail(await versionFor(await appId(), platform, version), listing);
+  console.log(`App Store ${platform}: ${version} icin inceleme iletisim bilgisi ve notu yuklendi`);
+}
+
 async function metadata(version, platform) {
   const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
   const app = await appId();
@@ -206,14 +225,16 @@ async function metadata(version, platform) {
     else loc = (await api("POST", "/appStoreVersionLocalizations", { data: { type: "appStoreVersionLocalizations", attributes: { locale, ...attributes }, relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: vid } } } } })).data;
     await uploadScreenshots(loc.id, DISPLAY_TYPES[platform], listing.screenshots);
   }
-  console.log(`App Store ${platform}: ${version} icin metinler, kategori, yas derecesi ve ekran goruntuleri yuklendi. Elle kalan: App Privacy (Data Not Collected), fiyat (Free).`);
+  await reviewDetail(vid, listing);
+  console.log(`App Store ${platform}: ${version} icin metinler, kategori, yas derecesi, ekran goruntuleri ve inceleme bilgileri yuklendi. Elle kalan: App Privacy (Data Not Collected), fiyat (Free).`);
 }
 
 const [cmd, ...args] = process.argv.slice(2);
 const platform = PLATFORM[args[cmd === "submit" ? 2 : 1] || "ios"];
 if (cmd === "submit" && args.length >= 2 && platform) await submit(args[0], args[1], platform);
 else if (cmd === "metadata" && args.length >= 1 && platform) await metadata(args[0], platform);
+else if (cmd === "review" && args.length >= 1 && platform) await review(args[0], platform);
 else {
-  console.error("kullanim: bun scripts/asc.js submit <surum> <derleme> [ios|mac|tv|vision] | metadata <surum> [ios|mac|tv|vision]");
+  console.error("kullanim: bun scripts/asc.js submit <surum> <derleme> [ios|mac|tv|vision] | metadata <surum> [ios|mac|tv|vision] | review <surum> [ios|mac|tv|vision]");
   process.exit(1);
 }
