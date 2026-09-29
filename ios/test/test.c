@@ -89,7 +89,9 @@ static void gameTests(Sudoku *e) {
     for (int i = 0; i < 81; i++) {
         if (g.value[i] == 0) check(g.notes[i] == sudoku_candidates(g.value, i), "not adaylari yanlis");
     }
-    check(!game_fill_notes(&g), "degismeyen not doldurma hamle sayildi");
+    check(game_fill_notes(&g), "dolu notlar temizlenmedi");
+    for (int i = 0; i < 81; i++) check(g.notes[i] == 0, "notlar temizlenmedi");
+    check(game_fill_notes(&g), "notlar tekrar dolmadi");
     check(game_hint(&g, e) && game_hint_active(&g) && g.hintKind == HINT_PLACE, "yerlestirme ipucusu gelmedi");
     int hc = g.hintCell;
     int hd = g.hintDigit;
@@ -126,6 +128,11 @@ static void gameTests(Sudoku *e) {
     }
     check(g.solved && g.selected == GAME_NONE, "cozuldu isareti yok");
     check(!game_enter(&g, 1) && !game_undo(&g), "cozulmus oyunda hamle yapildi");
+    game_restart(&g);
+    check(!g.solved && g.histCount == 0 && g.selected == GAME_NONE && g.elapsed == 0 && memcmp(g.value, g.given, sizeof(g.value)) == 0, "bastan baslatma sifirlamadi");
+    for (int i = 0; i < 81; i++) check(g.notes[i] == 0, "bastan baslatma notlari silmedi");
+    game_select(&g, cell);
+    check(game_enter(&g, right) && g.value[cell] == right, "bastan baslatilan oyunda hamle yapilamadi");
     game_free(&g);
     game_free(&h);
     game_free(&broken);

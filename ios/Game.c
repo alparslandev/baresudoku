@@ -24,21 +24,25 @@ static void clearHistory(Game *g) {
     g->recordLength = 0;
 }
 
-void game_start(Game *g, const int *puzzle, const int *full, int level) {
-    memcpy(g->given, puzzle, sizeof(g->given));
-    memcpy(g->solution, full, sizeof(g->solution));
-    memcpy(g->value, puzzle, sizeof(g->value));
+void game_restart(Game *g) {
+    memcpy(g->value, g->given, sizeof(g->value));
     memset(g->notes, 0, sizeof(g->notes));
     clearHistory(g);
-    g->active = 1;
     g->solved = 0;
     g->noteMode = 0;
-    g->level = level;
     g->selected = GAME_NONE;
     g->sticky = 0;
     g->elapsed = 0;
     g->running = 0;
     g->hintKind = HINT_NONE;
+}
+
+void game_start(Game *g, const int *puzzle, const int *full, int level) {
+    memcpy(g->given, puzzle, sizeof(g->given));
+    memcpy(g->solution, full, sizeof(g->solution));
+    g->level = level;
+    g->active = 1;
+    game_restart(g);
 }
 
 int game_can_edit(const Game *g) {
@@ -196,6 +200,13 @@ int game_fill_notes(Game *g) {
         if (g->notes[i] != m) {
             touch(g, i);
             g->notes[i] = m;
+        }
+    }
+    if (commit(g)) return 1;
+    for (int i = 0; i < 81; i++) {
+        if (g->value[i] == 0 && g->notes[i] != 0) {
+            touch(g, i);
+            g->notes[i] = 0;
         }
     }
     return commit(g);
