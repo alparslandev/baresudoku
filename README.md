@@ -22,7 +22,6 @@ Plain Java, no Gradle. APK about 25 KB, Android 8 and newer. Needs Android SDK b
 android/build.sh   # android/build/baresudoku.apk, prints the size in bytes
 android/bundle.sh  # android/build/bundle/baresudoku.aab for Google Play, needs bundletool.jar in $ANDROID_HOME/bundletool/
 android/test.sh    # generator, solver and game state tests on the desktop JVM
-bun run deploy     # tests, version bump, APK, tag and GitHub release
 ```
 
 The signing key lives in `~/.baresudoku`; back it up, updates are only possible with the same key.
@@ -36,10 +35,20 @@ ios/test.sh        # the same engine and game state checks, compiled with clang
 ios/build.sh sim   # quick simulator build: ios/build/sim/BareSudoku.app
 open ios/BareSudoku.xcodeproj
 bun run ipa        # archive and export a signed App Store IPA without uploading
-bun run deploy:ios # tests, build number bump, archive, upload to App Store Connect, tag
 ```
 
 The icon is generated from `ios/icon.svg` (the site favicon); `ios/store/` holds the App Store screenshots and listing text.
+
+## Releasing
+
+`bun run deploy` releases everything at once: Android, iOS and web tests, one shared version number (the Android versionCode and the iOS build number are the same), APK and AAB, Apple archives and uploads, git tag and GitHub release, Google Play upload, App Store review submission, and the web game from `../baresudoku-web`. `PLATFORMS="ios mac tv vision" bun run deploy` picks the Apple platforms to archive (default `ios`).
+
+The store steps need two credential files and are skipped with a notice when they are missing:
+
+- `~/.baresudoku/asc.json`: `{"keyId": "...", "issuerId": "...", "key": "/path/AuthKey_XXXX.p8"}`, an App Store Connect API key with the App Manager role.
+- `~/.baresudoku/play.json`: the Google Play service account key as downloaded from Google Cloud.
+
+First-time store setup: `bun scripts/asc.js metadata <version> [ios|mac|tv|vision]` and `bun scripts/play.js listing` upload the texts, categories and screenshots from `ios/store/listing.json` and `android/store/listing.json`. The questionnaires (App Privacy, Data safety, content rating) have no API; the answers are in the two `metadata.md` files. Release notes for both stores come from `release-notes.json`.
 
 ## License
 
