@@ -1,4 +1,5 @@
 #import <UIKit/UIKit.h>
+#include <string.h>
 #include <time.h>
 #include "Sudoku.h"
 #include "Game.h"
@@ -88,7 +89,12 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
     NSTimer *timer;
     CGFloat menuX, menuW, menuTop, menuRowH, menuTitleH;
     int menuRows;
+    int cursor, menuCursor;
+#ifdef SELFTEST
+    int demoDigit;
+#endif
 }
+- (BOOL)handlePress:(UIPress *)press;
 - (void)shown;
 - (void)hidden;
 @end
@@ -101,11 +107,22 @@ static BoardView *current;
     self = [super initWithFrame:frame];
     text = [[[NSLocale preferredLanguages] firstObject] hasPrefix:@"tr"] ? TR : EN;
     downTarget = -1;
+    cursor = 40;
     menuOpen = !game.active && pendingLevel < 0;
     wasGenerating = pendingLevel >= 0;
     self.contentMode = UIViewContentModeRedraw;
+#if !TARGET_OS_TV
     self.multipleTouchEnabled = NO;
+#endif
     [self applyTheme];
+#if TARGET_OS_TV
+    UISwipeGestureRecognizerDirection directions[] = {UISwipeGestureRecognizerDirectionUp, UISwipeGestureRecognizerDirectionDown, UISwipeGestureRecognizerDirectionLeft, UISwipeGestureRecognizerDirectionRight};
+    for (int i = 0; i < 4; i++) {
+        UISwipeGestureRecognizer *swipe = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipe:)];
+        swipe.direction = directions[i];
+        [self addGestureRecognizer:swipe];
+    }
+#endif
     return self;
 }
 
@@ -220,6 +237,9 @@ static BoardView *current;
     [self drawMessage];
     [self drawTools];
     [self drawKeys];
+#if TARGET_OS_TV
+    if (!generating && ![self overlay]) [self drawRing:[self targetRect:cursor]];
+#endif
     if ([self overlay]) [self drawMenu];
 }
 
@@ -301,14 +321,17 @@ static BoardView *current;
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (touches.anyObject.type == UITouchTypeIndirect) return;
     [self downAt:[touches.anyObject locationInView:self]];
 }
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (touches.anyObject.type == UITouchTypeIndirect) return;
     [self moveAt:[touches.anyObject locationInView:self]];
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (touches.anyObject.type == UITouchTypeIndirect) return;
     [self upAt:[touches.anyObject locationInView:self]];
 }
 
@@ -549,6 +572,10 @@ static BoardView *current;
         fillRect(menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25);
         drawText(label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4, menuW * 0.8), cKeyText, 0);
     }
+#if TARGET_OS_TV
+    CGFloat ry = [self menuRowY:menuCursor];
+    [self drawRing:CGRectMake(menuX + side, ry + inset, menuW - 2 * side, menuRowH - 2 * inset)];
+#endif
 }
 
 - (int)menuTargetAt:(CGPoint)p {
@@ -604,6 +631,7 @@ static BoardView *current;
 
 - (void)openMenu {
     menuOpen = YES;
+    menuCursor = 0;
     game_pause(&game, nowMs());
     [self stopTimer];
     [self setNeedsDisplay];
@@ -614,6 +642,156 @@ static BoardView *current;
     game_resume(&game, nowMs());
     [self run];
     [self setNeedsDisplay];
+}
+
+- (void)moveSelection:(int)dir {
+    if (!game.active || game.solved) return;
+    int i = game.selected < 0 ? 0 : game.selected;
+    int r = SUDOKU_ROW[i], c = SUDOKU_COL[i];
+    if (dir == 0) r = (r + 8) % 9;
+    else if (dir == 1) r = (r + 1) % 9;
+    else if (dir == 2) c = (c + 8) % 9;
+    else c = (c + 1) % 9;
+    game_select(&game, r * 9 + c);
+    [self setNeedsDisplay];
+}
+
+- (CGRect)targetRect:(int)t {
+    if (t < 81) return CGRectMake(boardX + SUDOKU_COL[t] * cell, boardY + SUDOKU_ROW[t] * cell, cell, cell);
+    if (t < 109) return CGRectMake(keyX[t - 100], keyY[t - 100], keyW, keyH);
+    if (t < 205) return CGRectMake(toolX[t - 200], toolY, toolW, toolH);
+    return CGRectMake(topX + topW - topH * 0.9, topY, topH * 0.9, topH);
+}
+
+- (int)neighborOf:(int)from dir:(int)dir {
+    CGRect a = [self targetRect:from];
+    CGFloat ax = CGRectGetMidX(a), ay = CGRectGetMidY(a);
+    int best = from;
+    CGFloat bestScore = 1e9;
+    for (int t = 0; t <= 300; t++) {
+        if (t == from || (t > 80 && t < 100) || (t > 108 && t < 200) || (t > 204 && t < 300)) continue;
+        CGRect b = [self targetRect:t];
+        CGFloat dx = CGRectGetMidX(b) - ax, dy = CGRectGetMidY(b) - ay;
+        CGFloat primary = dir == 0 ? -dy : dir == 1 ? dy : dir == 2 ? -dx : dx;
+        CGFloat secondary = fabs(dir < 2 ? dx : dy);
+        if (primary < cell * 0.4) continue;
+        CGFloat score = primary + secondary * 2;
+        if (score < bestScore) {
+            bestScore = score;
+            best = t;
+        }
+    }
+    return best;
+}
+
+- (void)drawRing:(CGRect)r {
+    CGContextRef c = UIGraphicsGetCurrentContext();
+    CGFloat w = cell * 0.08;
+    strokeSetup(c, cAccent, w);
+    CGContextAddPath(c, [UIBezierPath bezierPathWithRoundedRect:CGRectInset(r, w * 0.6, w * 0.6) cornerRadius:w * 1.5].CGPath);
+    CGContextStrokePath(c);
+}
+
+- (void)moveCursor:(int)dir {
+    if (pendingLevel >= 0) return;
+    if ([self overlay]) {
+        if (dir > 1) return;
+        [self layoutMenu];
+        menuCursor = MAX(0, MIN(menuRows - 1, menuCursor + (dir == 0 ? -1 : 1)));
+    } else {
+        cursor = [self neighborOf:cursor dir:dir];
+    }
+    [self setNeedsDisplay];
+}
+
+- (void)swipe:(UISwipeGestureRecognizer *)g {
+    UISwipeGestureRecognizerDirection d = g.direction;
+    [self moveCursor:d == UISwipeGestureRecognizerDirectionUp ? 0 : d == UISwipeGestureRecognizerDirectionDown ? 1 : d == UISwipeGestureRecognizerDirectionLeft ? 2 : 3];
+}
+
+- (BOOL)handlePress:(UIPress *)press {
+    int dir = -1, digit = 0, tool = 0;
+    BOOL select = NO, menu = NO, play = NO, escape = NO;
+    UIKey *key = press.key;
+    if (key) {
+        UIKeyboardHIDUsage u = key.keyCode;
+        if (u >= UIKeyboardHIDUsageKeyboard1 && u <= UIKeyboardHIDUsageKeyboard9) digit = (int)(u - UIKeyboardHIDUsageKeyboard1 + 1);
+        else if (u >= UIKeyboardHIDUsageKeypad1 && u <= UIKeyboardHIDUsageKeypad9) digit = (int)(u - UIKeyboardHIDUsageKeypad1 + 1);
+        else if (u == UIKeyboardHIDUsageKeyboardUpArrow) dir = 0;
+        else if (u == UIKeyboardHIDUsageKeyboardDownArrow) dir = 1;
+        else if (u == UIKeyboardHIDUsageKeyboardLeftArrow) dir = 2;
+        else if (u == UIKeyboardHIDUsageKeyboardRightArrow) dir = 3;
+        else if (u == UIKeyboardHIDUsageKeyboardDeleteOrBackspace || u == UIKeyboardHIDUsageKeyboardDeleteForward) tool = 201;
+        else if (u == UIKeyboardHIDUsageKeyboardU) tool = 200;
+        else if (u == UIKeyboardHIDUsageKeyboardN) tool = 202;
+        else if (u == UIKeyboardHIDUsageKeyboardF) tool = 203;
+        else if (u == UIKeyboardHIDUsageKeyboardH) tool = 204;
+        else if (u == UIKeyboardHIDUsageKeyboardEscape) escape = YES;
+        else if (u == UIKeyboardHIDUsageKeyboardReturnOrEnter || u == UIKeyboardHIDUsageKeyboardSpacebar) select = YES;
+        else return NO;
+    } else {
+        switch (press.type) {
+            case UIPressTypeUpArrow: dir = 0; break;
+            case UIPressTypeDownArrow: dir = 1; break;
+            case UIPressTypeLeftArrow: dir = 2; break;
+            case UIPressTypeRightArrow: dir = 3; break;
+            case UIPressTypeSelect: select = YES; break;
+            case UIPressTypeMenu: menu = YES; break;
+            case UIPressTypePlayPause: play = YES; break;
+            default: return NO;
+        }
+    }
+    if (pendingLevel >= 0) return !menu;
+    if ([self overlay]) {
+        if (dir == 0 || dir == 1) {
+            [self moveCursor:dir];
+            return YES;
+        }
+        if (select) {
+            [self layoutMenu];
+            [self menuAction:400 + menuCursor];
+            return YES;
+        }
+        if ((menu || escape || play) && [self cancellable]) {
+            [self closeMenu];
+            return YES;
+        }
+        return !menu;
+    }
+    if (digit) {
+        [self act:99 + digit];
+        return YES;
+    }
+    if (tool) {
+        [self act:tool];
+        return YES;
+    }
+    if (escape) {
+        if (game.sticky) [self act:99 + game.sticky];
+        else [self openMenu];
+        return YES;
+    }
+    if (play) {
+        [self openMenu];
+        return YES;
+    }
+#if TARGET_OS_TV
+    if (dir >= 0) {
+        [self moveCursor:dir];
+        return YES;
+    }
+    if (select) {
+        if (cursor < 81) [self finish:game_tap(&game, cursor)];
+        else [self act:cursor];
+        return YES;
+    }
+#else
+    if (dir >= 0) {
+        [self moveSelection:dir];
+        return YES;
+    }
+#endif
+    return NO;
 }
 
 #ifdef SELFTEST
@@ -639,6 +817,36 @@ static BoardView *current;
     NSLog(@"selftest %d: active=%d pending=%d sel=%d sticky=%d note=%d v0=%d given0=%d n1=%d given1=%d hint=%d menu=%d rows=%d", step, game.active, pendingLevel, game.selected, game.sticky, game.noteMode, game.value[0], game.given[0], game.notes[1], game.given[1], game.hintKind, menuOpen, menuRows);
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
 }
+
+#if TARGET_OS_MACCATALYST
+- (void)logFrame {
+    if (@available(macCatalyst 16.0, *)) {
+        CGRect f = self.window.windowScene.effectiveGeometry.systemFrame;
+        NSLog(@"frame %.0f %.0f %.0f %.0f", f.origin.x, f.origin.y, f.size.width, f.size.height);
+    }
+}
+#endif
+
+- (void)demo:(NSNumber *)stepNumber {
+    int step = stepNumber.intValue;
+    int given = 0;
+    while (given < 80 && game.given[given] == 0) given++;
+    CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
+    if (step == 0) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:2] + menuRowH / 2)]; }
+    else if (step <= 12) [self press:hint];
+    else if (step == 13) [self press:[self cellPoint:given]];
+    else if (step == 14) {
+        demoDigit = 1;
+        for (int d = 2; d <= 9; d++) if (game_remaining(&game, d) > game_remaining(&game, demoDigit)) demoDigit = d;
+        [self press:[self cellPoint:given]];
+        [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)];
+    }
+    else if (step == 15) { [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)]; [self press:hint]; }
+    else if (step == 16) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)];
+    else if (step == 17) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:6] + menuRowH / 2)]; }
+    NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d", step, game.selected, game.sticky, game.hintKind, menuOpen);
+    if (step < 17) [self performSelector:@selector(demo:) withObject:@(step + 1) afterDelay:1.5];
+}
 #endif
 
 @end
@@ -651,6 +859,17 @@ static BoardView *current;
     current = [[BoardView alloc] initWithFrame:CGRectZero];
     self.view = current;
 }
+- (BOOL)canBecomeFirstResponder {
+    return YES;
+}
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self becomeFirstResponder];
+}
+- (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    for (UIPress *press in presses) if ([current handlePress:press]) return;
+    [super pressesBegan:presses withEvent:event];
+}
 @end
 
 @interface SceneDelegate : UIResponder <UIWindowSceneDelegate>
@@ -662,6 +881,17 @@ static BoardView *current;
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.window.rootViewController = [BoardController new];
     [self.window makeKeyAndVisible];
+#ifdef SELFTEST
+    if (getenv("BARESUDOKU_DARK")) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+#if TARGET_OS_MACCATALYST
+    UIWindowScene *ws = (UIWindowScene *)scene;
+    ws.titlebar.titleVisibility = UITitlebarTitleVisibilityHidden;
+    ws.titlebar.toolbar = nil;
+    if (@available(macCatalyst 16.0, *)) {
+        [ws requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesMac alloc] initWithSystemFrame:CGRectMake(0, 0, 1280, 828)] errorHandler:nil];
+    }
+#endif
+#endif
 }
 - (void)sceneDidBecomeActive:(UIScene *)scene {
     [current shown];
@@ -669,8 +899,12 @@ static BoardView *current;
     static BOOL started;
     if (getenv("BARESUDOKU_SELFTEST") && !started) {
         started = YES;
-        [current performSelector:@selector(selftest:) withObject:@0 afterDelay:1.5];
+        SEL run = strcmp(getenv("BARESUDOKU_SELFTEST"), "demo") == 0 ? @selector(demo:) : @selector(selftest:);
+        [current performSelector:run withObject:@0 afterDelay:1.5];
     }
+#if TARGET_OS_MACCATALYST
+    [current performSelector:@selector(logFrame) withObject:nil afterDelay:1.0];
+#endif
 #endif
 }
 - (void)sceneWillResignActive:(UIScene *)scene {
