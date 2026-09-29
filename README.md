@@ -1,6 +1,6 @@
 # Bare Sudoku
 
-Ad-free, tiny Sudoku for Android and iOS. Zero libraries, no permissions, no tracking, no internet.
+Ad-free, tiny Sudoku for Android, iPhone, iPad, Mac, Apple TV and Apple Vision Pro. Zero libraries, no permissions, no tracking, no internet.
 
 Play in the browser at [baresudoku.com](https://baresudoku.com) (separate project: [baresudoku-web](https://github.com/alparslandev/baresudoku-web)), or download the [latest Android APK](https://github.com/alparslandev/baresudoku/releases/latest/download/baresudoku.apk).
 
@@ -26,9 +26,9 @@ android/test.sh    # generator, solver and game state tests on the desktop JVM
 
 The signing key lives in `~/.baresudoku`; back it up, updates are only possible with the same key.
 
-## iOS (`ios/`)
+## Apple platforms (`ios/`)
 
-The engine is C (`Sudoku.c`, `Game.c`), the interface is Objective-C drawn by hand (`main.m`). No storyboards, no Swift, no libraries. The signed App Store package is about 55 KB; installed, the app is about 150 KB, most of it the Mach-O page alignment and the icon catalog Apple requires. Needs Xcode 26.
+The engine is C (`Sudoku.c`, `Game.c`), the interface is Objective-C drawn by hand (`main.m`). No storyboards, no Swift, no libraries. One Xcode project, two targets: `BareSudoku` builds for iPhone, iPad, Mac (Mac Catalyst) and Apple Vision Pro; `BareSudokuTV` builds for Apple TV, where a cursor ring follows the Siri Remote (swipe or arrows to move, Select to tap, Menu to close the menu). Hardware keyboards on iPad and Mac: digits, arrows, Backspace, N notes, U undo, F fill notes, H hint, Esc unlocks a digit or opens the menu. The signed iPhone package is about 55 KB (installed about 150 KB, most of it Mach-O page alignment and the icon catalog Apple requires), the Mac package about 115 KB, the Apple TV package about 225 KB (layered icons and top shelf images). Needs Xcode 26 with the tvOS and visionOS platforms installed.
 
 ```sh
 ios/test.sh        # the same engine and game state checks, compiled with clang
@@ -41,7 +41,7 @@ The icon is generated from `ios/icon.svg` (the site favicon); `ios/store/` holds
 
 ## Releasing
 
-`bun run deploy` releases everything at once: Android, iOS and web tests, one shared version number (the Android versionCode and the iOS build number are the same), APK and AAB, Apple archives and uploads, git tag and GitHub release, Google Play upload, App Store review submission, and the web game from `../baresudoku-web`. `PLATFORMS="ios mac tv vision" bun run deploy` picks the Apple platforms to archive (default `ios`).
+`bun run deploy` releases everything at once: Android, iOS and web tests, one shared version number (the Android versionCode and the iOS build number are the same), APK and AAB, Apple archives and uploads, git tag and GitHub release, Google Play upload, App Store review submission, and the web game from `../baresudoku-web`. `PLATFORMS="ios mac" bun run deploy` picks the Apple platforms to archive (default: all four, `ios mac tv vision`).
 
 The store steps need two credential files and are skipped with a notice when they are missing:
 

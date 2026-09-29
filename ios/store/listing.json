@@ -29,9 +29,33 @@
       "4-menu.png",
       "5-dark.png"
     ],
-    "APP_IPAD_PRO_3GEN_129": [],
-    "APP_DESKTOP": [],
-    "APP_APPLE_TV": [],
-    "APP_APPLE_VISION_PRO": []
+    "APP_IPAD_PRO_3GEN_129": [
+      "ipad-1-board.png",
+      "ipad-2-lock.png",
+      "ipad-3-hint.png",
+      "ipad-4-menu.png",
+      "ipad-5-dark.png"
+    ],
+    "APP_DESKTOP": [
+      "mac-1-board.png",
+      "mac-2-lock.png",
+      "mac-3-hint.png",
+      "mac-4-menu.png",
+      "mac-5-dark.png"
+    ],
+    "APP_APPLE_TV": [
+      "tv-1-board.png",
+      "tv-2-lock.png",
+      "tv-3-hint.png",
+      "tv-4-menu.png",
+      "tv-5-dark.png"
+    ],
+    "APP_APPLE_VISION_PRO": [
+      "vision-1-board.png",
+      "vision-2-lock.png",
+      "vision-3-hint.png",
+      "vision-4-menu.png",
+      "vision-5-dark.png"
+    ]
   }
 }
