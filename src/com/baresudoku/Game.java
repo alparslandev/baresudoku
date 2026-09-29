@@ -198,4 +198,93 @@ final class Game {
         hintMoves = history.size();
         return true;
     }
+
+    String encode(long now) {
+        StringBuilder sb = new StringBuilder(700);
+        sb.append(active ? 1 : 0).append('|').append(level).append('|').append(solved ? 1 : 0).append('|')
+            .append(showErrors ? 1 : 0).append('|').append(noteMode ? 1 : 0).append('|').append(selected).append('|')
+            .append(time(now)).append('|');
+        appendDigits(sb, given);
+        sb.append('|');
+        appendDigits(sb, solution);
+        sb.append('|');
+        appendDigits(sb, value);
+        sb.append('|');
+        for (int m : notes) {
+            sb.append((char) ('0' + (m >> 6))).append((char) ('0' + ((m >> 3) & 7))).append((char) ('0' + (m & 7)));
+        }
+        sb.append('|').append(history.size());
+        for (int[] r : history) {
+            sb.append('|');
+            for (int i = 0; i < r.length; i++) {
+                if (i > 0) sb.append(',');
+                sb.append(r[i]);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static void appendDigits(StringBuilder sb, int[] a) {
+        for (int v : a) sb.append((char) ('0' + v));
+    }
+
+    private static void readDigits(String s, int[] a) {
+        if (s.length() != 81) throw new IllegalArgumentException();
+        for (int i = 0; i < 81; i++) {
+            int v = s.charAt(i) - '0';
+            if (v < 0 || v > 9) throw new IllegalArgumentException();
+            a[i] = v;
+        }
+    }
+
+    boolean decode(String s) {
+        active = false;
+        if (s == null) return false;
+        try {
+            String[] f = s.split("\\|", -1);
+            if (f.length < 12) return false;
+            showErrors = f[3].equals("1");
+            if (!f[0].equals("1")) return true;
+            int lvl = Integer.parseInt(f[1]);
+            int sel = Integer.parseInt(f[5]);
+            long time = Long.parseLong(f[6]);
+            if (lvl < 0 || lvl > 3 || sel < NONE || sel > 80 || time < 0) return false;
+            readDigits(f[7], given);
+            readDigits(f[8], solution);
+            readDigits(f[9], value);
+            if (f[10].length() != 243) return false;
+            for (int i = 0; i < 81; i++) {
+                int m = 0;
+                for (int k = 0; k < 3; k++) {
+                    int o = f[10].charAt(i * 3 + k) - '0';
+                    if (o < 0 || o > 7) return false;
+                    m = (m << 3) | o;
+                }
+                notes[i] = m;
+            }
+            int n = Integer.parseInt(f[11]);
+            if (n < 0 || f.length != 12 + n) return false;
+            history.clear();
+            for (int k = 0; k < n; k++) {
+                String[] parts = f[12 + k].split(",");
+                if (parts.length % 3 != 0) return false;
+                int[] r = new int[parts.length];
+                for (int i = 0; i < parts.length; i++) r[i] = Integer.parseInt(parts[i]);
+                history.add(r);
+            }
+            recordLength = 0;
+            level = lvl;
+            solved = f[2].equals("1");
+            noteMode = f[4].equals("1");
+            selected = sel;
+            elapsed = time;
+            runningSince = 0;
+            hintKind = HINT_NONE;
+            active = true;
+            return true;
+        } catch (RuntimeException e) {
+            active = false;
+            return false;
+        }
+    }
 }
