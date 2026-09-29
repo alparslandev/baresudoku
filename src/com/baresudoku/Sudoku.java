@@ -61,4 +61,46 @@ final class Sudoku {
         }
         return ALL & ~used;
     }
+
+    private final int[] work = new int[81];
+    private int count;
+    private int limit;
+    int[] found;
+
+    int countSolutions(int[] puzzle, int max) {
+        System.arraycopy(puzzle, 0, work, 0, 81);
+        count = 0;
+        limit = max;
+        found = null;
+        search();
+        return count;
+    }
+
+    private void search() {
+        int best = -1;
+        int bestMask = 0;
+        int bestSize = 10;
+        for (int i = 0; i < 81; i++) {
+            if (work[i] != 0) continue;
+            int m = candidates(work, i);
+            int n = Integer.bitCount(m);
+            if (n == 0) return;
+            if (n < bestSize) {
+                bestSize = n;
+                best = i;
+                bestMask = m;
+                if (n == 1) break;
+            }
+        }
+        if (best < 0) {
+            count++;
+            if (found == null) found = work.clone();
+            return;
+        }
+        for (int m = bestMask; m != 0 && count < limit; m &= m - 1) {
+            work[best] = digit(m & -m);
+            search();
+        }
+        work[best] = 0;
+    }
 }
