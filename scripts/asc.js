@@ -180,10 +180,13 @@ async function appInfo(app, listing) {
       id: age.id,
       attributes: {
         alcoholTobaccoOrDrugUseOrReferences: "NONE", contests: "NONE", gambling: false, gamblingSimulated: "NONE",
-        horrorOrFearThemes: "NONE", matureOrSuggestiveThemes: "NONE", medicalOrTreatmentInformation: "NONE",
-        profanityOrCrudeHumor: "NONE", sexualContentGraphicAndNudity: "NONE", sexualContentOrNudity: "NONE",
-        unrestrictedWebAccess: false, violenceCartoonOrFantasy: "NONE", violenceRealistic: "NONE",
+        gunsOrOtherWeapons: "NONE", horrorOrFearThemes: "NONE", matureOrSuggestiveThemes: "NONE",
+        medicalOrTreatmentInformation: "NONE", profanityOrCrudeHumor: "NONE", sexualContentGraphicAndNudity: "NONE",
+        sexualContentOrNudity: "NONE", violenceCartoonOrFantasy: "NONE", violenceRealistic: "NONE",
         violenceRealisticProlongedGraphicOrSadistic: "NONE",
+        advertising: false, ageAssurance: false, healthOrWellnessTopics: false, lootBox: false,
+        messagingAndChat: false, parentalControls: false, socialMedia: false, unrestrictedWebAccess: false,
+        userGeneratedContent: false, ageRatingOverrideV2: "NONE", koreaAgeRatingOverride: "NONE",
       },
     },
   });
@@ -192,6 +195,7 @@ async function appInfo(app, listing) {
 async function metadata(version, platform) {
   const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
   const app = await appId();
+  await api("PATCH", `/apps/${app}`, { data: { type: "apps", id: app, attributes: { contentRightsDeclaration: "DOES_NOT_USE_THIRD_PARTY_CONTENT" } } });
   await appInfo(app, listing);
   const vid = await versionFor(app, platform, version);
   const locs = await localizations(vid);
@@ -202,7 +206,7 @@ async function metadata(version, platform) {
     else loc = (await api("POST", "/appStoreVersionLocalizations", { data: { type: "appStoreVersionLocalizations", attributes: { locale, ...attributes }, relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: vid } } } } })).data;
     await uploadScreenshots(loc.id, DISPLAY_TYPES[platform], listing.screenshots);
   }
-  console.log(`App Store ${platform}: ${version} icin metinler, kategori, yas derecesi ve ekran goruntuleri yuklendi. Elle kalan: App Privacy (Data Not Collected), fiyat (Free), icerik haklari.`);
+  console.log(`App Store ${platform}: ${version} icin metinler, kategori, yas derecesi ve ekran goruntuleri yuklendi. Elle kalan: App Privacy (Data Not Collected), fiyat (Free).`);
 }
 
 const [cmd, ...args] = process.argv.slice(2);
