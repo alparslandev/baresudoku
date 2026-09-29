@@ -1,0 +1,10 @@
+{
+  "name": "baresudoku",
+  "private": true,
+  "scripts": {
+    "deploy": "sh scripts/deploy.sh"
+  },
+  "devDependencies": {
+    "wrangler": "^4.112.0"
+  }
+}
