@@ -174,4 +174,71 @@ final class Sudoku {
     private boolean keeps(int[] puzzle) {
         return countSolutions(puzzle, 2) == 1;
     }
+
+    private final int[] lv = new int[81];
+    private final int[] lc = new int[81];
+    int stepCell;
+    int stepDigit;
+    int stepUnit;
+
+    void load(int[] values) {
+        System.arraycopy(values, 0, lv, 0, 81);
+        for (int i = 0; i < 81; i++) lc[i] = lv[i] == 0 ? candidates(lv, i) : 0;
+    }
+
+    int valueAt(int cell) {
+        return lv[cell];
+    }
+
+    int candidatesAt(int cell) {
+        return lc[cell];
+    }
+
+    boolean complete() {
+        for (int i = 0; i < 81; i++) if (lv[i] == 0) return false;
+        return true;
+    }
+
+    boolean stuck() {
+        for (int i = 0; i < 81; i++) if (lv[i] == 0 && lc[i] == 0) return true;
+        return false;
+    }
+
+    private void place(int cell, int d, int unit) {
+        lv[cell] = d;
+        lc[cell] = 0;
+        int keep = ~bit(d);
+        for (int p : PEERS[cell]) lc[p] &= keep;
+        stepCell = cell;
+        stepDigit = d;
+        stepUnit = unit;
+    }
+
+    boolean singles() {
+        for (int i = 0; i < 81; i++) {
+            if (lv[i] == 0 && Integer.bitCount(lc[i]) == 1) {
+                place(i, digit(lc[i]), 3);
+                return true;
+            }
+        }
+        for (int u = 0; u < 27; u++) {
+            int[] cells = UNITS[u];
+            for (int d = 1; d <= 9; d++) {
+                int b = bit(d);
+                int where = -1;
+                int n = 0;
+                for (int k = 0; k < 9; k++) {
+                    if ((lc[cells[k]] & b) != 0) {
+                        n++;
+                        where = cells[k];
+                    }
+                }
+                if (n == 1) {
+                    place(where, d, u / 9);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }
