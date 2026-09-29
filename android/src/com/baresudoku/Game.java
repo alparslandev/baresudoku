@@ -49,7 +49,7 @@ final class Game {
     }
 
     void select(int cell) {
-        selected = cell;
+        if (sticky == 0) selected = cell;
     }
 
     boolean enter(int d) {
@@ -84,6 +84,7 @@ final class Game {
     boolean key(int d) {
         if (sticky == 0 && canEdit() && (noteMode ? value[selected] == 0 : value[selected] != d)) return enter(d);
         sticky = sticky == d || remaining(d) <= 0 ? 0 : d;
+        if (sticky != 0) selected = NONE;
         return false;
     }
 
@@ -94,7 +95,9 @@ final class Game {
             return false;
         }
         selected = cell;
-        return enter(sticky);
+        boolean changed = enter(sticky);
+        selected = NONE;
+        return changed;
     }
 
     boolean erase() {
@@ -167,7 +170,7 @@ final class Game {
             value[r[i]] = r[i + 1];
             notes[r[i]] = r[i + 2];
         }
-        selected = r[0];
+        if (sticky == 0) selected = r[0];
         return true;
     }
 
@@ -207,6 +210,7 @@ final class Game {
 
     boolean hint(Sudoku engine) {
         if (!active || solved) return false;
+        sticky = 0;
         if (hintActive() && hintKind == HINT_PLACE && value[hintCell] == 0) {
             noteMode = false;
             hintKind = HINT_NONE;
