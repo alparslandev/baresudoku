@@ -4,6 +4,8 @@ Ad-free, tiny Sudoku for Android. Plain Java, zero libraries, no permissions, no
 
 Download the APK from the [website](https://baresudoku.alp-develioglu.workers.dev) or from [GitHub Releases](https://github.com/alparslandev/baresudoku/releases).
 
+<img src="screenshot.png" width="270" alt="Bare Sudoku on a phone">
+
 ## Features
 
 - Four levels (Easy, Medium, Hard, Expert). Every puzzle is solvable by pure logic, no guessing.
