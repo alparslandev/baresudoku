@@ -43,6 +43,7 @@ typedef struct Game {
 void game_init(Game *g);
 void game_free(Game *g);
 void game_start(Game *g, const int *puzzle, const int *full, int level);
+void game_restart(Game *g);
 int game_can_edit(const Game *g);
 void game_select(Game *g, int cell);
 int game_enter(Game *g, int d);
