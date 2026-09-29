@@ -9,6 +9,10 @@
 		BA000002 /* Sudoku.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000012 /* Sudoku.c */; };
 		BA000003 /* Game.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000013 /* Game.c */; };
 		BA000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA000016 /* Assets.xcassets */; };
+		BA000005 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = BA000011 /* main.m */; };
+		BA000006 /* Sudoku.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000012 /* Sudoku.c */; };
+		BA000007 /* Game.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000013 /* Game.c */; };
+		BA000008 /* Assets-tv.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA00001A /* Assets-tv.xcassets */; };
 		BA000010 /* BareSudoku.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BareSudoku.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA000011 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		BA000012 /* Sudoku.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Sudoku.c; sourceTree = "<group>"; };
@@ -17,6 +21,10 @@
 		BA000015 /* Game.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Game.h; sourceTree = "<group>"; };
 		BA000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BA000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BA000018 /* Mac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mac.entitlements; sourceTree = "<group>"; };
+		BA000019 /* BareSudokuTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BareSudokuTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA00001A /* Assets-tv.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets-tv.xcassets"; sourceTree = "<group>"; };
+		BA00001B /* Info-tv.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-tv.plist"; sourceTree = "<group>"; };
 		BA000020 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -42,6 +50,31 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BA000023 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA000005 /* main.m in Sources */,
+				BA000006 /* Sudoku.c in Sources */,
+				BA000007 /* Game.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA000024 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA000025 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA000008 /* Assets-tv.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BA000030 = {
 			isa = PBXGroup;
 			children = (
@@ -52,6 +85,9 @@
 				BA000015 /* Game.h */,
 				BA000016 /* Assets.xcassets */,
 				BA000017 /* Info.plist */,
+				BA000018 /* Mac.entitlements */,
+				BA00001A /* Assets-tv.xcassets */,
+				BA00001B /* Info-tv.plist */,
 				BA000031 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -60,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				BA000010 /* BareSudoku.app */,
+				BA000019 /* BareSudokuTV.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -81,6 +118,23 @@
 			productReference = BA000010 /* BareSudoku.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BA000042 /* BareSudokuTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA000053 /* Build configuration list for PBXNativeTarget "BareSudokuTV" */;
+			buildPhases = (
+				BA000023 /* Sources */,
+				BA000024 /* Frameworks */,
+				BA000025 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BareSudokuTV;
+			productName = BareSudokuTV;
+			productReference = BA000019 /* BareSudokuTV.app */;
+			productType = "com.apple.product-type.application";
+		};
 		BA000041 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
@@ -88,6 +142,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					BA000040 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					BA000042 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -106,6 +163,7 @@
 			projectRoot = "";
 			targets = (
 				BA000040 /* BareSudoku */,
+				BA000042 /* BareSudokuTV */,
 			);
 		};
 		BA000060 /* Debug */ = {
@@ -175,9 +233,13 @@
 				INFOPLIST_FILE = Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
 				PRODUCT_NAME = BareSudoku;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				TARGETED_DEVICE_FAMILY = 1;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Mac.entitlements;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -192,9 +254,51 @@
 				INFOPLIST_FILE = Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
 				PRODUCT_NAME = BareSudoku;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				TARGETED_DEVICE_FAMILY = 1;
+				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = Mac.entitlements;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BA000064 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				ASSETCATALOG_COMPILER_OPTIMIZATION = space;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9X2XU3N96X;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Info-tv.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
+				PRODUCT_NAME = BareSudokuTV;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
+			};
+			name = Debug;
+		};
+		BA000065 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				ASSETCATALOG_COMPILER_OPTIMIZATION = space;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9X2XU3N96X;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Info-tv.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
+				PRODUCT_NAME = BareSudokuTV;
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 15.0;
 			};
 			name = Release;
 		};
@@ -203,6 +307,15 @@
 			buildConfigurations = (
 				BA000060 /* Debug */,
 				BA000061 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BA000053 /* Build configuration list for PBXNativeTarget "BareSudokuTV" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA000064 /* Debug */,
+				BA000065 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
