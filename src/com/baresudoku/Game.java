@@ -156,4 +156,46 @@ final class Game {
         }
         return commit();
     }
+
+    static final int HINT_NONE = 0;
+    static final int HINT_WRONG = 1;
+    static final int HINT_PLACE = 2;
+    int hintKind;
+    int hintCell = NONE;
+    int hintDigit;
+    int hintTech;
+    int hintUnit;
+    private int hintMoves;
+
+    boolean hintActive() {
+        return hintKind != HINT_NONE && active && !solved && history.size() == hintMoves && selected == hintCell;
+    }
+
+    boolean hint(Sudoku engine) {
+        if (!active || solved) return false;
+        if (hintActive() && hintKind == HINT_PLACE && value[hintCell] == 0) {
+            noteMode = false;
+            hintKind = HINT_NONE;
+            return enter(hintDigit);
+        }
+        hintKind = HINT_NONE;
+        for (int i = 0; i < 81; i++) {
+            if (given[i] == 0 && value[i] != 0 && value[i] != solution[i]) {
+                hintKind = HINT_WRONG;
+                hintCell = i;
+                selected = i;
+                hintMoves = history.size();
+                return true;
+            }
+        }
+        if (!engine.hint(value)) return false;
+        hintKind = HINT_PLACE;
+        hintCell = engine.stepCell;
+        hintDigit = engine.stepDigit;
+        hintTech = engine.hintTech;
+        hintUnit = engine.stepUnit;
+        selected = hintCell;
+        hintMoves = history.size();
+        return true;
+    }
 }
