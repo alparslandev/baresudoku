@@ -241,4 +241,59 @@ final class Sudoku {
         }
         return false;
     }
+
+    boolean lockedCandidates() {
+        boolean changed = false;
+        for (int d = 1; d <= 9; d++) {
+            int b = bit(d);
+            for (int box = 0; box < 9; box++) {
+                int rows = 0;
+                int cols = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = UNITS[18 + box][k];
+                    if ((lc[c] & b) != 0) {
+                        rows |= 1 << ROW[c];
+                        cols |= 1 << COL[c];
+                    }
+                }
+                if (rows != 0 && Integer.bitCount(rows) == 1) {
+                    changed |= clearLineOutsideBox(UNITS[Integer.numberOfTrailingZeros(rows)], box, b);
+                }
+                if (cols != 0 && Integer.bitCount(cols) == 1) {
+                    changed |= clearLineOutsideBox(UNITS[9 + Integer.numberOfTrailingZeros(cols)], box, b);
+                }
+            }
+            for (int line = 0; line < 18; line++) {
+                int boxes = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = UNITS[line][k];
+                    if ((lc[c] & b) != 0) boxes |= 1 << BOX[c];
+                }
+                if (boxes != 0 && Integer.bitCount(boxes) == 1) {
+                    int box = Integer.numberOfTrailingZeros(boxes);
+                    for (int k = 0; k < 9; k++) {
+                        int c = UNITS[18 + box][k];
+                        boolean inLine = line < 9 ? ROW[c] == line : COL[c] == line - 9;
+                        if (!inLine && (lc[c] & b) != 0) {
+                            lc[c] &= ~b;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+
+    private boolean clearLineOutsideBox(int[] line, int box, int b) {
+        boolean changed = false;
+        for (int k = 0; k < 9; k++) {
+            int c = line[k];
+            if (BOX[c] != box && (lc[c] & b) != 0) {
+                lc[c] &= ~b;
+                changed = true;
+            }
+        }
+        return changed;
+    }
 }
