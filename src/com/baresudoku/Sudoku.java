@@ -296,4 +296,80 @@ final class Sudoku {
         }
         return changed;
     }
+
+    private final int[] positions = new int[10];
+
+    boolean subsets() {
+        boolean changed = false;
+        for (int u = 0; u < 27; u++) {
+            int[] cells = UNITS[u];
+            for (int a = 0; a < 9; a++) {
+                int ma = lc[cells[a]];
+                if (ma == 0 || Integer.bitCount(ma) > 3) continue;
+                for (int b = a + 1; b < 9; b++) {
+                    int mb = lc[cells[b]];
+                    if (mb == 0 || Integer.bitCount(mb) > 3) continue;
+                    int m2 = ma | mb;
+                    if (Integer.bitCount(m2) == 2) {
+                        changed |= clearOthers(cells, m2, (1 << a) | (1 << b));
+                    } else if (Integer.bitCount(m2) == 3) {
+                        for (int c = b + 1; c < 9; c++) {
+                            int mc = lc[cells[c]];
+                            if (mc != 0 && (mc | m2) == m2) {
+                                changed |= clearOthers(cells, m2, (1 << a) | (1 << b) | (1 << c));
+                            }
+                        }
+                    }
+                }
+            }
+            for (int d = 1; d <= 9; d++) {
+                int b = bit(d);
+                int m = 0;
+                for (int k = 0; k < 9; k++) if ((lc[cells[k]] & b) != 0) m |= 1 << k;
+                positions[d] = m;
+            }
+            for (int d1 = 1; d1 <= 9; d1++) {
+                int p1 = positions[d1];
+                if (p1 == 0 || Integer.bitCount(p1) > 3) continue;
+                for (int d2 = d1 + 1; d2 <= 9; d2++) {
+                    int p2 = positions[d2];
+                    if (p2 == 0 || Integer.bitCount(p2) > 3) continue;
+                    int u2 = p1 | p2;
+                    if (Integer.bitCount(u2) == 2) {
+                        changed |= keepOnly(cells, u2, bit(d1) | bit(d2));
+                    } else if (Integer.bitCount(u2) == 3) {
+                        for (int d3 = d2 + 1; d3 <= 9; d3++) {
+                            int p3 = positions[d3];
+                            if (p3 != 0 && (p3 | u2) == u2) {
+                                changed |= keepOnly(cells, u2, bit(d1) | bit(d2) | bit(d3));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+
+    private boolean clearOthers(int[] cells, int digits, int members) {
+        boolean changed = false;
+        for (int k = 0; k < 9; k++) {
+            if ((members & (1 << k)) == 0 && (lc[cells[k]] & digits) != 0) {
+                lc[cells[k]] &= ~digits;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private boolean keepOnly(int[] cells, int members, int digits) {
+        boolean changed = false;
+        for (int k = 0; k < 9; k++) {
+            if ((members & (1 << k)) != 0 && (lc[cells[k]] & ~digits) != 0) {
+                lc[cells[k]] &= digits;
+                changed = true;
+            }
+        }
+        return changed;
+    }
 }
