@@ -165,32 +165,59 @@ final class BoardView extends View implements Runnable {
         float cw = w - insetL - insetR;
         float ch = h - insetT - insetB;
         if (cw <= 0 || ch <= 0) return;
-        landscape = false;
         float pad = Math.min(cw, ch) * 0.03f;
-        topH = cw * 0.10f;
-        msgH = cw * 0.09f;
-        toolH = cw * 0.17f;
-        keyH = cw * 0.15f;
-        float fixed = topH + msgH + toolH + keyH;
-        boardSize = Math.min(cw - 2 * pad, ch - 2 * pad - fixed - 4 * pad);
-        float gap = Math.min((ch - 2 * pad - fixed - boardSize) / 4, pad * 3);
-        if (gap < 0) gap = 0;
-        float y = top + pad + (ch - 2 * pad - fixed - boardSize - 4 * gap) / 2;
-        boardX = left + (cw - boardSize) / 2;
-        topX = boardX;
-        topW = boardSize;
-        topY = y;
-        boardY = topY + topH + gap;
-        msgX = boardX;
-        msgW = boardSize;
-        msgY = boardY + boardSize + gap;
-        toolY = msgY + msgH + gap;
-        toolW = boardSize / 5;
-        for (int i = 0; i < 5; i++) toolX[i] = boardX + i * toolW;
-        keyW = boardSize / 9;
-        for (int i = 0; i < 9; i++) {
-            keyX[i] = boardX + i * keyW;
-            keyY[i] = toolY + toolH + gap;
+        landscape = cw > ch;
+        if (landscape) {
+            boardSize = Math.min(ch - 2 * pad, cw * 0.55f);
+            boardX = left + pad;
+            boardY = top + (ch - boardSize) / 2;
+            float px = boardX + boardSize + pad * 2;
+            float pw = left + cw - pad - px;
+            topX = px;
+            topW = pw;
+            topY = boardY;
+            topH = boardSize * 0.11f;
+            msgX = px;
+            msgW = pw;
+            msgY = topY + topH + pad;
+            msgH = boardSize * 0.11f;
+            toolW = pw / 5;
+            toolH = boardSize * 0.2f;
+            toolY = msgY + msgH + pad;
+            for (int i = 0; i < 5; i++) toolX[i] = px + i * toolW;
+            float ky = toolY + toolH + pad;
+            keyW = pw / 3;
+            keyH = (boardY + boardSize - ky) / 3;
+            for (int i = 0; i < 9; i++) {
+                keyX[i] = px + (i % 3) * keyW;
+                keyY[i] = ky + (i / 3) * keyH;
+            }
+        } else {
+            topH = cw * 0.10f;
+            msgH = cw * 0.09f;
+            toolH = cw * 0.17f;
+            keyH = cw * 0.15f;
+            float fixed = topH + msgH + toolH + keyH;
+            boardSize = Math.min(cw - 2 * pad, ch - 2 * pad - fixed - 4 * pad);
+            float gap = Math.min((ch - 2 * pad - fixed - boardSize) / 4, pad * 3);
+            if (gap < 0) gap = 0;
+            float y = top + pad + (ch - 2 * pad - fixed - boardSize - 4 * gap) / 2;
+            boardX = left + (cw - boardSize) / 2;
+            topX = boardX;
+            topW = boardSize;
+            topY = y;
+            boardY = topY + topH + gap;
+            msgX = boardX;
+            msgW = boardSize;
+            msgY = boardY + boardSize + gap;
+            toolY = msgY + msgH + gap;
+            toolW = boardSize / 5;
+            for (int i = 0; i < 5; i++) toolX[i] = boardX + i * toolW;
+            keyW = boardSize / 9;
+            for (int i = 0; i < 9; i++) {
+                keyX[i] = boardX + i * keyW;
+                keyY[i] = toolY + toolH + gap;
+            }
         }
         cell = boardSize / 9;
     }
