@@ -2,7 +2,7 @@
 
 Ad-free, tiny Sudoku for Android. Plain Java, zero libraries, no permissions, no tracking.
 
-Download the APK from the [website](https://baresudoku.com) or from [GitHub Releases](https://github.com/alparslandev/baresudoku/releases).
+Play in the browser at [baresudoku.com](https://baresudoku.com) (separate project: [baresudoku-web](https://github.com/alparslandev/baresudoku-web)), or download the [latest APK](https://github.com/alparslandev/baresudoku/releases/latest/download/baresudoku.apk).
 
 <img src="screenshot.png" width="270" alt="Bare Sudoku on a phone">
 
@@ -25,7 +25,7 @@ Needs Android SDK build-tools 36.0.0, platform 36 and JDK 17. No Gradle.
 
 ## Release
 
-Run `bun install` once, then `bun run deploy`. It runs the tests, bumps the version, builds the APK, tags the commit, creates a GitHub release with the APK and publishes the site to Cloudflare. The signing key lives in `~/.baresudoku`; back it up, updates are only possible with the same key.
+`bun run deploy` (or `sh scripts/deploy.sh`) runs the tests, bumps the version, builds the APK, tags the commit and creates a GitHub release with the APK. The signing key lives in `~/.baresudoku`; back it up, updates are only possible with the same key.
 
 ## License
 

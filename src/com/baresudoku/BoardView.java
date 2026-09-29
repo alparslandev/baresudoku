@@ -35,6 +35,16 @@ final class BoardView extends View implements Runnable {
     static final int S_AGAIN = 21;
     static final int S_TECH = 22;
     static final int S_TITLE = 28;
+    static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
+        "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
+        "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
+        "Only place for # in this box", "Tap hint again to place it", "Locked candidates", "Pair or triple",
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku"};
+    static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
+        "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
+        "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
+        "Bu kutuda # için tek yer", "Yerleştirmek için ipucuna tekrar bas", "Kilitli adaylar", "Çift veya üçlü",
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -93,7 +103,7 @@ final class BoardView extends View implements Runnable {
         host = activity;
         game = MainActivity.game;
         dark = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        text = Strings.forTag(Locale.getDefault().toLanguageTag());
+        text = Locale.getDefault().getLanguage().equals("tr") ? TR : EN;
         if (dark) {
             cBg = 0xFF121212;
             cLine = 0xFF3A3A3A;
