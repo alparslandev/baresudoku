@@ -61,7 +61,8 @@ export_archive() {
 for P in $PLATFORMS; do
   case $P in
     ios) step "iOS arsiv"; archive ios BareSudoku 'generic/platform=iOS' ;;
-    mac) step "macOS arsiv"; archive mac BareSudoku 'generic/platform=macOS,variant=Mac Catalyst' ;;
+    mac) step "macOS arsiv"; archive mac BareSudoku 'generic/platform=macOS,variant=Mac Catalyst'
+         codesign --force --sign - --entitlements ios/Mac.entitlements ios/build/mac.xcarchive/Products/Applications/*.app ;;
     vision) step "visionOS arsiv"; archive vision BareSudoku 'generic/platform=visionOS' ;;
     tv) step "tvOS arsiv"; archive tv BareSudokuTV 'generic/platform=tvOS' ;;
     *) echo "Bilinmeyen platform: $P"; exit 1 ;;
