@@ -2,6 +2,6 @@
   "name": "baresudoku",
   "private": true,
   "scripts": {
-    "deploy": "sh scripts/deploy.sh"
+    "deploy": "sh scripts/deploy-android.sh"
   }
 }
