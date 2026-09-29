@@ -1,0 +1,8 @@
+{
+  "optimizations": {
+    "uncompress_dex_files": { "enabled": false },
+    "resource_optimizations": {
+      "collapsed_resource_names": { "collapse_resource_names": true }
+    }
+  }
+}

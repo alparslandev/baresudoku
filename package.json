@@ -4,6 +4,7 @@
   "scripts": {
     "deploy": "sh scripts/deploy-android.sh",
     "deploy:ios": "sh scripts/deploy-ios.sh",
-    "ipa": "sh scripts/deploy-ios.sh ipa"
+    "ipa": "sh scripts/deploy-ios.sh ipa",
+    "aab": "sh android/bundle.sh"
   }
 }
