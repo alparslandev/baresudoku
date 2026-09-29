@@ -20,6 +20,7 @@ Plain Java, no Gradle. APK about 25 KB, Android 8 and newer. Needs Android SDK b
 
 ```sh
 android/build.sh   # android/build/baresudoku.apk, prints the size in bytes
+android/bundle.sh  # android/build/bundle/baresudoku.aab for Google Play, needs bundletool.jar in $ANDROID_HOME/bundletool/
 android/test.sh    # generator, solver and game state tests on the desktop JVM
 bun run deploy     # tests, version bump, APK, tag and GitHub release
 ```
