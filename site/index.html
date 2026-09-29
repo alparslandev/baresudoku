@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bare Sudoku</title>
+<meta name="description" content="Ad-free, tiny Sudoku for Android. {{SIZE}} KB, no permissions, no tracking.">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Crect width='48' height='48' rx='10' fill='%23fff'/%3E%3Cpath d='M8 8h32v32H8zM18.67 8v32M29.33 8v32M8 18.67h32M8 29.33h32' fill='none' stroke='%23202124' stroke-width='2.5'/%3E%3Crect x='18.67' y='18.67' width='10.66' height='10.66' fill='%231a73e8'/%3E%3C/svg%3E">
+<style>
+:root{--bg:#fff;--fg:#202124;--muted:#5f6368;--accent:#1a73e8;--card:#e8eaed}
+@media(prefers-color-scheme:dark){:root{--bg:#121212;--fg:#f0f0f0;--muted:#a0a0a0;--accent:#8ab4f8;--card:#2a2a2a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.55 system-ui,-apple-system,sans-serif}
+main{max-width:620px;margin:0 auto;padding:56px 20px 64px}
+h1{font-size:2.6rem;line-height:1.1;margin:16px 0 8px}
+h2{font-size:1.3rem;margin:0 0 8px}
+p{margin:0 0 16px}
+.btn{display:inline-block;background:var(--accent);color:#fff;padding:14px 24px;border-radius:12px;text-decoration:none;font-weight:600;font-size:1.05rem}
+.btn:hover{filter:brightness(1.1)}
+small{color:var(--muted)}
+ul{padding-left:1.2em;margin:0 0 24px}
+li{margin:4px 0}
+hr{border:0;border-top:1px solid var(--card);margin:40px 0}
+a{color:var(--accent)}
+svg{display:block}
+</style>
+</head>
+<body>
+<main>
+<svg width="72" height="72" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="#fff" stroke="var(--card)"/><path d="M8 8h32v32H8zM18.67 8v32M29.33 8v32M8 18.67h32M8 29.33h32" fill="none" stroke="#202124" stroke-width="2.5"/><rect x="18.67" y="18.67" width="10.66" height="10.66" fill="#1a73e8"/></svg>
+<h1>Bare Sudoku</h1>
+<p>Ad-free, tiny Sudoku for Android. No permissions, no tracking, no nonsense.</p>
+<p><a class="btn" href="/baresudoku.apk">Download APK · {{SIZE}} KB</a></p>
+<p><small>Version {{VERSION}} · Android 8 and newer · <a href="https://github.com/alparslandev/baresudoku">Source on GitHub</a> (MIT)</small></p>
+<ul>
+<li>Four levels; every puzzle is solvable by logic alone, no guessing</li>
+<li>Notes, undo, erase, fill all notes, hints that explain the reasoning</li>
+<li>Highlights, mistake marking, automatic save, dark mode</li>
+<li>Plain Java, zero libraries, no internet permission</li>
+</ul>
+<p><small>Install: download the APK, open it, allow installing from this source once.</small></p>
+<hr>
+<h2 lang="tr">Türkçe</h2>
+<p lang="tr">Reklamsız, minicik Android sudoku. İzin yok, takip yok.</p>
+<ul lang="tr">
+<li>Dört seviye; her bulmaca tahmin gerektirmeden mantıkla çözülür</li>
+<li>Not, geri al, sil, tüm notları doldur, sebebini açıklayan ipucu</li>
+<li>Vurgular, yanlış işareti, otomatik kayıt, koyu tema</li>
+<li>Düz Java, sıfır kütüphane, internet izni yok</li>
+</ul>
+<p lang="tr"><small>Kurulum: APK'yı indir, aç, bu kaynaktan kuruluma bir kez izin ver.</small></p>
+</main>
+</body>
+</html>
