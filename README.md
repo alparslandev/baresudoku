@@ -4,7 +4,7 @@ Ad-free, tiny Sudoku for Android. Plain Java, zero libraries, no permissions, no
 
 Play in the browser at [baresudoku.com](https://baresudoku.com) (separate project: [baresudoku-web](https://github.com/alparslandev/baresudoku-web)), or download the [latest APK](https://github.com/alparslandev/baresudoku/releases/latest/download/baresudoku.apk).
 
-<img src="screenshot.png" width="270" alt="Bare Sudoku on a phone">
+<img src="android/screenshot.png" width="270" alt="Bare Sudoku on a phone">
 
 ## Features
 
@@ -20,8 +20,8 @@ Play in the browser at [baresudoku.com](https://baresudoku.com) (separate projec
 Needs Android SDK build-tools 36.0.0, platform 36 and JDK 17. No Gradle.
 
 ```sh
-./build.sh   # build/baresudoku.apk, prints the size in bytes
-./test.sh    # generator, solver and game state tests on the desktop JVM
+android/build.sh   # android/build/baresudoku.apk, prints the size in bytes
+android/test.sh    # generator, solver and game state tests on the desktop JVM
 ```
 
 ## Release
