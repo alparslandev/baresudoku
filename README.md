@@ -10,6 +10,7 @@ Play in the browser at [baresudoku.com](https://baresudoku.com) (separate projec
 
 - Four levels (Easy, Medium, Hard, Expert). Every puzzle is solvable by pure logic, no guessing.
 - Notes, undo, erase, fill all notes, and hints that explain the reasoning: singles, locked candidates, pairs and triples, X-Wing, Y-Wing, Swordfish, XYZ-Wing.
+- Digit-first entry: tap a digit key twice (or once with nothing selected) to lock it, then tap cells to place it. Cell-first entry works as usual.
 - Row, column, box and same-digit highlights, mistake marking (can be turned off), automatic save, dark mode, landscape and tablet layouts.
 - English and Turkish, following the system language.
 - APK about 25 KB. Android 8 and newer. No internet permission.
