@@ -143,4 +143,17 @@ final class Game {
         selected = r[0];
         return true;
     }
+
+    boolean fillNotes() {
+        if (!active || solved) return false;
+        for (int i = 0; i < 81; i++) {
+            if (value[i] != 0) continue;
+            int m = Sudoku.candidates(value, i);
+            if (notes[i] != m) {
+                touch(i);
+                notes[i] = m;
+            }
+        }
+        return commit();
+    }
 }
