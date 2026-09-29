@@ -1,0 +1,221 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+		BA000001 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = BA000011 /* main.m */; };
+		BA000002 /* Sudoku.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000012 /* Sudoku.c */; };
+		BA000003 /* Game.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000013 /* Game.c */; };
+		BA000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA000016 /* Assets.xcassets */; };
+		BA000010 /* BareSudoku.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BareSudoku.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BA000011 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		BA000012 /* Sudoku.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Sudoku.c; sourceTree = "<group>"; };
+		BA000013 /* Game.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Game.c; sourceTree = "<group>"; };
+		BA000014 /* Sudoku.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Sudoku.h; sourceTree = "<group>"; };
+		BA000015 /* Game.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Game.h; sourceTree = "<group>"; };
+		BA000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BA000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BA000020 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA000021 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA000001 /* main.m in Sources */,
+				BA000002 /* Sudoku.c in Sources */,
+				BA000003 /* Game.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA000022 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA000004 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BA000030 = {
+			isa = PBXGroup;
+			children = (
+				BA000011 /* main.m */,
+				BA000012 /* Sudoku.c */,
+				BA000014 /* Sudoku.h */,
+				BA000013 /* Game.c */,
+				BA000015 /* Game.h */,
+				BA000016 /* Assets.xcassets */,
+				BA000017 /* Info.plist */,
+				BA000031 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BA000031 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BA000010 /* BareSudoku.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BA000040 /* BareSudoku */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BA000052 /* Build configuration list for PBXNativeTarget "BareSudoku" */;
+			buildPhases = (
+				BA000021 /* Sources */,
+				BA000020 /* Frameworks */,
+				BA000022 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BareSudoku;
+			productName = BareSudoku;
+			productReference = BA000010 /* BareSudoku.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BA000041 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 2620;
+				TargetAttributes = {
+					BA000040 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+				};
+			};
+			buildConfigurationList = BA000051 /* Build configuration list for PBXProject "BareSudoku" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = BA000030;
+			productRefGroup = BA000031 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BA000040 /* BareSudoku */,
+			);
+		};
+		BA000060 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				GCC_ENABLE_CPP_EXCEPTIONS = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		BA000061 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = YES;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEPLOYMENT_POSTPROCESSING = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = c11;
+				GCC_ENABLE_CPP_EXCEPTIONS = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = NO;
+				GCC_OPTIMIZATION_LEVEL = z;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				OTHER_CFLAGS = (
+					"-fno-unwind-tables",
+					"-fno-asynchronous-unwind-tables",
+				);
+				OTHER_LDFLAGS = (
+					"-Wl,-no_data_const",
+					"-Wl,-no_function_starts",
+				);
+				SDKROOT = iphoneos;
+				STRIP_INSTALLED_PRODUCT = YES;
+				STRIP_STYLE = all;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		BA000062 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_OPTIMIZATION = space;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9X2XU3N96X;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
+				PRODUCT_NAME = BareSudoku;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BA000063 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_OPTIMIZATION = space;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9X2XU3N96X;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baresudoku;
+				PRODUCT_NAME = BareSudoku;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BA000051 /* Build configuration list for PBXProject "BareSudoku" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA000060 /* Debug */,
+				BA000061 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BA000052 /* Build configuration list for PBXNativeTarget "BareSudoku" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BA000062 /* Debug */,
+				BA000063 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+	};
+	rootObject = BA000041 /* Project object */;
+}
