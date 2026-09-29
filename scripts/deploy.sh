@@ -16,12 +16,7 @@ VERSION="1.$((NEW - 1))"
 sed -i '' "s/android:versionCode=\"$CODE\"/android:versionCode=\"$NEW\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION\"/" AndroidManifest.xml
 ./build.sh
 SIZE=$(wc -c < build/baresudoku.apk | tr -d ' ')
-KB=$(( (SIZE + 512) / 1024 ))
-rm -rf build/site
-mkdir -p build/site
-cp build/baresudoku.apk build/site/baresudoku.apk
-cp site/_headers build/site/_headers
-sed "s/{{VERSION}}/$VERSION/g; s/{{SIZE}}/$KB/g" site/index.html > build/site/index.html
+sh scripts/site.sh
 git add AndroidManifest.xml
 git commit -q -m "Surum $VERSION"
 git tag "v$VERSION"

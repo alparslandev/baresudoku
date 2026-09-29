@@ -2,7 +2,7 @@
 
 Ad-free, tiny Sudoku for Android. Plain Java, zero libraries, no permissions, no tracking.
 
-Download the APK from the [website](https://baresudoku.alp-develioglu.workers.dev) or from [GitHub Releases](https://github.com/alparslandev/baresudoku/releases).
+Download the APK from the [website](https://baresudoku.com) or from [GitHub Releases](https://github.com/alparslandev/baresudoku/releases).
 
 <img src="screenshot.png" width="270" alt="Bare Sudoku on a phone">
 
