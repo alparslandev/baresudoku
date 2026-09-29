@@ -372,4 +372,55 @@ final class Sudoku {
         }
         return changed;
     }
+
+    private final int[] lineMasks = new int[9];
+
+    boolean fish(int size) {
+        boolean changed = false;
+        for (int d = 1; d <= 9; d++) {
+            int b = bit(d);
+            for (int t = 0; t < 2; t++) {
+                for (int line = 0; line < 9; line++) {
+                    int m = 0;
+                    for (int k = 0; k < 9; k++) {
+                        if ((lc[UNITS[t * 9 + line][k]] & b) != 0) m |= 1 << k;
+                    }
+                    lineMasks[line] = m;
+                }
+                for (int l1 = 0; l1 < 9; l1++) {
+                    int m1 = lineMasks[l1];
+                    if (m1 == 0 || Integer.bitCount(m1) > size) continue;
+                    for (int l2 = l1 + 1; l2 < 9; l2++) {
+                        int m2 = lineMasks[l2];
+                        if (m2 == 0 || Integer.bitCount(m2) > size) continue;
+                        int u2 = m1 | m2;
+                        if (size == 2) {
+                            if (Integer.bitCount(u2) == 2) changed |= fishClear(b, t, u2, (1 << l1) | (1 << l2));
+                        } else if (Integer.bitCount(u2) <= 3) {
+                            for (int l3 = l2 + 1; l3 < 9; l3++) {
+                                int m3 = lineMasks[l3];
+                                if (m3 == 0 || Integer.bitCount(m3) > 3) continue;
+                                int u3 = u2 | m3;
+                                if (Integer.bitCount(u3) == 3) changed |= fishClear(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return changed;
+    }
+
+    private boolean fishClear(int b, int t, int coverMask, int baseMask) {
+        boolean changed = false;
+        for (int c = 0; c < 81; c++) {
+            int base = t == 0 ? ROW[c] : COL[c];
+            int cover = t == 0 ? COL[c] : ROW[c];
+            if ((coverMask & (1 << cover)) != 0 && (baseMask & (1 << base)) == 0 && (lc[c] & b) != 0) {
+                lc[c] &= ~b;
+                changed = true;
+            }
+        }
+        return changed;
+    }
 }
