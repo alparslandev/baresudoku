@@ -29,6 +29,7 @@ final class SudokuTest {
             System.out.printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi %s%n",
                 LEVELS[level], n, clues / (double) n, ms / (double) n, Arrays.toString(techniques));
         }
+        gameTests(engine);
         System.out.println(failures == 0 ? "TAMAM" : "HATA: " + failures);
         if (failures != 0) System.exit(1);
     }
@@ -79,5 +80,60 @@ final class SudokuTest {
         if (ok) return;
         failures++;
         if (failures <= 20) System.out.println("HATA: " + what);
+    }
+
+    static void gameTests(Sudoku e) {
+        int[] puzzle = e.generate(1);
+        Game g = new Game();
+        g.start(puzzle, e.solution, 1);
+        int cell = firstEmpty(puzzle);
+        int right = e.solution[cell];
+        int wrong = right == 9 ? 1 : right + 1;
+        g.select(cell);
+        check(g.enter(wrong), "rakam girilemedi");
+        check(g.value[cell] == wrong && g.wrong(cell), "yanlis rakam isaretlenmedi");
+        check(g.hint(e) && g.hintKind == Game.HINT_WRONG && g.hintCell == cell, "yanlis rakam ipucusu gelmedi");
+        check(g.undo() && g.value[cell] == 0 && g.selected == cell, "geri al degeri dondurmedi");
+        g.noteMode = true;
+        check(g.enter(right) && g.notes[cell] == Sudoku.bit(right), "not yazilmadi");
+        check(g.enter(right) && g.notes[cell] == 0, "not kapanmadi");
+        g.noteMode = false;
+        check(g.fillNotes(), "notlar dolmadi");
+        for (int i = 0; i < 81; i++) {
+            if (g.value[i] == 0) check(g.notes[i] == Sudoku.candidates(g.value, i), "not adaylari yanlis");
+        }
+        check(!g.fillNotes(), "degismeyen not doldurma hamle sayildi");
+        check(g.hint(e) && g.hintActive() && g.hintKind == Game.HINT_PLACE, "yerlestirme ipucusu gelmedi");
+        int hc = g.hintCell;
+        int hd = g.hintDigit;
+        check(hd == e.solution[hc], "ipucu rakami yanlis");
+        check(g.hint(e) && g.value[hc] == hd, "ikinci basis rakami koymadi");
+        for (int p : Sudoku.PEERS[hc]) check((g.notes[p] & Sudoku.bit(hd)) == 0, "es hucre notu silinmedi");
+        check(g.undo() && g.value[hc] == 0 && g.notes[hc] == Sudoku.candidates(g.value, hc), "ipucu geri alinamadi");
+        g.resume(0);
+        g.pause(500);
+        check(g.time(9999) == 500, "sure yanlis");
+        String saved = g.encode(1000);
+        Game h = new Game();
+        check(h.decode(saved), "kayit okunamadi");
+        check(saved.equals(h.encode(0)), "kayit gidip gelince degisti");
+        check(h.history.size() == g.history.size() && h.undo(), "kayittan sonra geri al yok");
+        check(!new Game().decode("bozuk"), "bozuk kayit kabul edildi");
+        check(!new Game().decode(saved.substring(0, 100)), "kesik kayit kabul edildi");
+        Game empty = new Game();
+        check(empty.decode("0|0|0|0|0|-1|0|||||0") && !empty.active && !empty.showErrors, "bos kayit okunamadi");
+        for (int i = 0; i < 81; i++) {
+            if (g.value[i] != 0) continue;
+            g.select(i);
+            check(g.enter(e.solution[i]), "cozum girilemedi");
+        }
+        check(g.solved && g.selected == Game.NONE, "cozuldu isareti yok");
+        check(!g.enter(1) && !g.undo(), "cozulmus oyunda hamle yapildi");
+        System.out.println("Oyun durumu testleri gecti");
+    }
+
+    static int firstEmpty(int[] values) {
+        for (int i = 0; i < 81; i++) if (values[i] == 0) return i;
+        return -1;
     }
 }
