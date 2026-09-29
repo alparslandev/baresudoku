@@ -103,4 +103,48 @@ final class Sudoku {
         }
         work[best] = 0;
     }
+
+    int[] fullGrid() {
+        Arrays.fill(work, 0);
+        fillRandom();
+        return work.clone();
+    }
+
+    private boolean fillRandom() {
+        int best = -1;
+        int bestMask = 0;
+        int bestSize = 10;
+        for (int i = 0; i < 81; i++) {
+            if (work[i] != 0) continue;
+            int m = candidates(work, i);
+            int n = Integer.bitCount(m);
+            if (n == 0) return false;
+            if (n < bestSize) {
+                bestSize = n;
+                best = i;
+                bestMask = m;
+                if (n == 1) break;
+            }
+        }
+        if (best < 0) return true;
+        int[] digits = new int[bestSize];
+        int n = 0;
+        for (int m = bestMask; m != 0; m &= m - 1) digits[n++] = digit(m & -m);
+        shuffle(digits);
+        for (int d : digits) {
+            work[best] = d;
+            if (fillRandom()) return true;
+        }
+        work[best] = 0;
+        return false;
+    }
+
+    private void shuffle(int[] a) {
+        for (int k = a.length - 1; k > 0; k--) {
+            int j = random.nextInt(k + 1);
+            int t = a[k];
+            a[k] = a[j];
+            a[j] = t;
+        }
+    }
 }
