@@ -38,14 +38,14 @@ def web(keys, languages):
 
 
 def java_string(s):
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
 
 
 def write_java(keys, languages):
     lines = ["package com.baresudoku;", "", "final class Strings {", "    static final String[] TABLE = {"]
     for code in ordered(languages):
         entry = "\n".join([code, languages[code][0]] + table(keys, languages[code]))
-        lines.append("        " + java_string(entry.replace("\n", "\\n")) + ",")
+        lines.append("        " + java_string(entry) + ",")
     lines += [
         "    };",
         "",
