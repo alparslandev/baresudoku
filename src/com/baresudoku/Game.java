@@ -34,7 +34,8 @@ final class Game {
         level = newLevel;
         selected = NONE;
         elapsed = 0;
-        runningSince = 0;
+        running = false;
+        hintKind = HINT_NONE;
     }
 
     boolean canEdit() {
@@ -119,18 +120,21 @@ final class Game {
     }
 
     void resume(long now) {
-        if (active && !solved && runningSince == 0) runningSince = now;
+        if (active && !solved && !running) {
+            running = true;
+            runningSince = now;
+        }
     }
 
     void pause(long now) {
-        if (runningSince != 0) {
+        if (running) {
             elapsed += now - runningSince;
-            runningSince = 0;
+            running = false;
         }
     }
 
     long time(long now) {
-        return elapsed + (runningSince == 0 ? 0 : now - runningSince);
+        return elapsed + (running ? now - runningSince : 0);
     }
 
     boolean undo() {
@@ -278,7 +282,7 @@ final class Game {
             noteMode = f[4].equals("1");
             selected = sel;
             elapsed = time;
-            runningSince = 0;
+            running = false;
             hintKind = HINT_NONE;
             active = true;
             return true;
@@ -287,4 +291,6 @@ final class Game {
             return false;
         }
     }
+
+    boolean running;
 }
