@@ -37,6 +37,7 @@ NEW=$((CODE + 1))
 VERSION="1.$((NEW - 1))"
 sed -i '' "s/android:versionCode=\"$CODE\"/android:versionCode=\"$NEW\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION\"/" android/AndroidManifest.xml
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" -c "Set :CFBundleShortVersionString $VERSION" ios/Info.plist
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" -c "Set :CFBundleShortVersionString $VERSION" ios/Info-tv.plist
 echo "Surum $VERSION, derleme $NEW"
 
 step "Android APK ve AAB"
@@ -78,7 +79,7 @@ for P in $PLATFORMS; do
 done
 
 step "Commit, etiket, GitHub surumu"
-git add android/AndroidManifest.xml ios/Info.plist
+git add android/AndroidManifest.xml ios/Info.plist ios/Info-tv.plist
 git commit -q -m "Surum $VERSION"
 git tag "v$VERSION"
 git push -q
