@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+<rect width="1024" height="500" fill="#ffffff"/>
+<g transform="translate(120 106) scale(6)">
+<path d="M0 0h48v48H0z" fill="#ffffff"/>
+<path d="M8 8h32v32H8zM18.67 8v32M29.33 8v32M8 18.67h32M8 29.33h32" fill="none" stroke="#202124" stroke-width="2.5"/>
+<rect x="18.67" y="18.67" width="10.66" height="10.66" fill="#1a73e8"/>
+</g>
+<text x="440" y="232" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="88" font-weight="700" fill="#202124">Bare Sudoku</text>
+<text x="442" y="304" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="40" fill="#5f6368">No ads. No account. 25 KB.</text>
+</svg>
