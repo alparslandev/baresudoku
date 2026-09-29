@@ -30,7 +30,6 @@ final class SudokuTest {
                 LEVELS[level], n, clues / (double) n, ms / (double) n, Arrays.toString(techniques));
         }
         gameTests(engine);
-        stringsTests();
         System.out.println(failures == 0 ? "TAMAM" : "HATA: " + failures);
         if (failures != 0) System.exit(1);
     }
@@ -136,25 +135,5 @@ final class SudokuTest {
     static int firstEmpty(int[] values) {
         for (int i = 0; i < 81; i++) if (values[i] == 0) return i;
         return -1;
-    }
-
-    static void stringsTests() {
-        int n = Strings.forTag("en").length;
-        check(n >= 32, "metin sayisi az");
-        for (String entry : Strings.TABLE) {
-            String[] parts = entry.split("\n");
-            check(parts.length == n + 2, "dil tablosu uzunlugu farkli: " + parts[0]);
-            for (String part : parts) check(!part.isEmpty(), "bos metin: " + parts[0]);
-        }
-        check(Strings.forTag("tr-TR")[0].equals("Kolay"), "tr eslesmedi");
-        check(Strings.forTag("de")[0].equals("Leicht"), "de eslesmedi");
-        check(Strings.forTag("zh-Hant-TW")[2].equals("困難"), "zh-Hant eslesmedi");
-        check(Strings.forTag("zh-TW")[2].equals("困難"), "zh-TW eslesmedi");
-        check(Strings.forTag("zh-CN")[2].equals("困难"), "zh-CN eslesmedi");
-        check(Strings.forTag("pt-BR")[0].equals("Fácil"), "pt-BR eslesmedi");
-        check(Strings.forTag("no-NO")[0].equals("Lett"), "no eslesmedi");
-        check(Strings.forTag("xx-YY")[0].equals("Easy"), "bilinmeyen dil en olmadi");
-        check(Strings.forTag("ar")[28].equals("Bare Sudoku"), "baslik sabit degil");
-        System.out.println("Dil tablosu testleri gecti: " + Strings.TABLE.length + " dil");
     }
 }

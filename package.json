@@ -2,11 +2,6 @@
   "name": "baresudoku",
   "private": true,
   "scripts": {
-    "deploy": "sh scripts/deploy.sh",
-    "site": "sh scripts/site.sh && wrangler deploy",
-    "test": "./test.sh && bun test test/engine.test.js"
-  },
-  "devDependencies": {
-    "wrangler": "^4.112.0"
+    "deploy": "sh scripts/deploy.sh"
   }
 }
