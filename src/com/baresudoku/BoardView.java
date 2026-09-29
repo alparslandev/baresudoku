@@ -261,7 +261,7 @@ final class BoardView extends View implements Runnable {
 
     private void drawBoard(Canvas c) {
         int sel = game.selected;
-        int selValue = sel >= 0 ? game.value[sel] : 0;
+        int selValue = sel >= 0 && game.value[sel] != 0 ? game.value[sel] : game.sticky;
         int selBit = selValue == 0 ? 0 : Sudoku.bit(selValue);
         for (int i = 0; i < 81; i++) {
             int color = 0;
@@ -310,10 +310,11 @@ final class BoardView extends View implements Runnable {
         for (int d = 1; d <= 9; d++) {
             float x = keyX[d - 1];
             float y = keyY[d - 1];
-            fillRect(c, x + inset, y + inset, x + keyW - inset, y + keyH - inset, cKey, keyW * 0.15f);
+            boolean on = d == game.sticky;
+            fillRect(c, x + inset, y + inset, x + keyW - inset, y + keyH - inset, on ? cAccent : cKey, keyW * 0.15f);
             int left = game.active ? Math.max(0, game.remaining(d)) : 9;
-            drawText(c, DIGITS[d], x + keyW / 2, y + keyH * 0.42f, keyH * 0.5f, left > 0 ? cKeyText : cMuted, Typeface.DEFAULT);
-            if (left > 0) drawText(c, DIGITS[left], x + keyW / 2, y + keyH * 0.8f, keyH * 0.2f, cMuted, Typeface.DEFAULT);
+            drawText(c, DIGITS[d], x + keyW / 2, y + keyH * 0.42f, keyH * 0.5f, on ? cBg : left > 0 ? cKeyText : cMuted, Typeface.DEFAULT);
+            if (left > 0) drawText(c, DIGITS[left], x + keyW / 2, y + keyH * 0.8f, keyH * 0.2f, on ? cBg : cMuted, Typeface.DEFAULT);
         }
     }
 
@@ -346,20 +347,19 @@ final class BoardView extends View implements Runnable {
         }
         if (MainActivity.pendingLevel >= 0) return true;
         int t = target(x, y);
-        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_MOVE) {
-            if (t >= 0 && t < 81) {
-                if (action == MotionEvent.ACTION_DOWN) downTarget = -1;
+        if (action == MotionEvent.ACTION_DOWN) {
+            downTarget = t;
+            if (t >= 0 && t < 81) finish(game.tap(t));
+        } else if (action == MotionEvent.ACTION_MOVE) {
+            if (t >= 0 && t < 81 && t != downTarget) {
+                downTarget = -1;
                 if (game.active && game.selected != t) {
                     game.select(t);
                     invalidate();
                 }
-            } else if (action == MotionEvent.ACTION_DOWN) {
-                downTarget = t;
             }
-        } else if (action == MotionEvent.ACTION_UP) {
-            if (t >= 100 && t == downTarget) act(t);
-            downTarget = -1;
-        } else if (action == MotionEvent.ACTION_CANCEL) {
+        } else {
+            if (action == MotionEvent.ACTION_UP && t >= 100 && t == downTarget) act(t);
             downTarget = -1;
         }
         return true;
@@ -367,7 +367,7 @@ final class BoardView extends View implements Runnable {
 
     private void act(int t) {
         boolean changed = false;
-        if (t >= 100 && t < 109) changed = game.enter(t - 99);
+        if (t >= 100 && t < 109) changed = game.key(t - 99);
         else if (t == 200) changed = game.undo();
         else if (t == 201) changed = game.erase();
         else if (t == 202) game.noteMode = !game.noteMode;
@@ -377,11 +377,15 @@ final class BoardView extends View implements Runnable {
             openMenu();
             return;
         }
+        finish(changed || t == 202);
+    }
+
+    private void finish(boolean changed) {
         if (game.solved) {
             game.pause(SystemClock.elapsedRealtime());
             removeCallbacks(this);
         }
-        if (changed || t == 202) MainActivity.save();
+        if (changed) MainActivity.save();
         invalidate();
     }
 
