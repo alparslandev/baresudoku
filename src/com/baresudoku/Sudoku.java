@@ -172,7 +172,7 @@ final class Sudoku {
     }
 
     private boolean keeps(int[] puzzle) {
-        return countSolutions(puzzle, 2) == 1;
+        return countSolutions(puzzle, 2) == 1 && withinAllowed(puzzle);
     }
 
     private final int[] lv = new int[81];
@@ -482,5 +482,64 @@ final class Sudoku {
             }
         }
         return false;
+    }
+
+    int allowed;
+    int hintTech;
+    int[] solution;
+
+    int step() {
+        if (singles()) return 0;
+        if (lockedCandidates()) return 1;
+        if (subsets()) return 2;
+        if (xWing()) return 3;
+        if (yWing()) return 4;
+        if (swordfish()) return 5;
+        if (xyzWing()) return 6;
+        return -1;
+    }
+
+    int rate(int[] puzzle) {
+        load(puzzle);
+        int max = 0;
+        while (!complete()) {
+            if (stuck()) return -1;
+            int t = step();
+            if (t < 0) return -1;
+            if (t > max) max = t;
+        }
+        return max;
+    }
+
+    private boolean withinAllowed(int[] puzzle) {
+        int r = rate(puzzle);
+        return r >= 0 && r <= allowed;
+    }
+
+    boolean hint(int[] values) {
+        load(values);
+        hintTech = 0;
+        while (!complete() && !stuck()) {
+            int t = step();
+            if (t < 0) return false;
+            if (t == 0) return true;
+            if (t > hintTech) hintTech = t;
+        }
+        return false;
+    }
+
+    int[] generate(int level) {
+        allowed = level < 2 ? 0 : level == 2 ? 2 : 6;
+        int minClues = level == 0 ? 38 : 0;
+        while (true) {
+            int[] full = fullGrid();
+            int[] puzzle = dig(full, minClues);
+            int r = rate(puzzle);
+            boolean ok = level == 2 ? r >= 1 : level == 3 ? r >= 3 : r == 0;
+            if (ok) {
+                solution = full;
+                return puzzle;
+            }
+        }
     }
 }
