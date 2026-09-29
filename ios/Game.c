@@ -50,7 +50,7 @@ int game_can_edit(const Game *g) {
 }
 
 void game_select(Game *g, int cell) {
-    g->selected = cell;
+    if (g->sticky == 0) g->selected = cell;
 }
 
 static void touch(Game *g, int cell) {
@@ -127,6 +127,7 @@ int game_enter(Game *g, int d) {
 int game_key(Game *g, int d) {
     if (g->sticky == 0 && game_can_edit(g) && (g->noteMode ? g->value[g->selected] == 0 : g->value[g->selected] != d)) return game_enter(g, d);
     g->sticky = g->sticky == d || game_remaining(g, d) <= 0 ? 0 : d;
+    if (g->sticky != 0) g->selected = GAME_NONE;
     return 0;
 }
 
@@ -137,7 +138,9 @@ int game_tap(Game *g, int cell) {
         return 0;
     }
     g->selected = cell;
-    return game_enter(g, g->sticky);
+    int changed = game_enter(g, g->sticky);
+    g->selected = GAME_NONE;
+    return changed;
 }
 
 int game_erase(Game *g) {
@@ -186,7 +189,7 @@ int game_undo(Game *g) {
         g->value[r[i]] = r[i + 1];
         g->notes[r[i]] = r[i + 2];
     }
-    g->selected = r[0];
+    if (g->sticky == 0) g->selected = r[0];
     g->histLen = start;
     g->histCount--;
     return 1;
@@ -218,6 +221,7 @@ int game_hint_active(const Game *g) {
 
 int game_hint(Game *g, Sudoku *engine) {
     if (!g->active || g->solved) return 0;
+    g->sticky = 0;
     if (game_hint_active(g) && g->hintKind == HINT_PLACE && g->value[g->hintCell] == 0) {
         g->noteMode = 0;
         g->hintKind = HINT_NONE;
