@@ -147,4 +147,31 @@ final class Sudoku {
             a[j] = t;
         }
     }
+
+    int[] dig(int[] full, int minClues) {
+        int[] puzzle = full.clone();
+        int[] order = new int[41];
+        for (int i = 0; i < 41; i++) order[i] = i;
+        shuffle(order);
+        int clues = 81;
+        for (int k = 0; k < 41 && clues > minClues; k++) {
+            int a = order[k];
+            int b = 80 - a;
+            int va = puzzle[a];
+            int vb = puzzle[b];
+            puzzle[a] = 0;
+            puzzle[b] = 0;
+            if (keeps(puzzle)) {
+                clues -= a == b ? 1 : 2;
+            } else {
+                puzzle[a] = va;
+                puzzle[b] = vb;
+            }
+        }
+        return puzzle;
+    }
+
+    private boolean keeps(int[] puzzle) {
+        return countSolutions(puzzle, 2) == 1;
+    }
 }
