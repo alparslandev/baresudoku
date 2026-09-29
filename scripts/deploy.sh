@@ -12,7 +12,7 @@ fi
 ./test.sh 30
 CODE=$(sed -n 's/.*android:versionCode="\([0-9]*\)".*/\1/p' AndroidManifest.xml)
 NEW=$((CODE + 1))
-VERSION="1.$NEW"
+VERSION="1.$((NEW - 1))"
 sed -i '' "s/android:versionCode=\"$CODE\"/android:versionCode=\"$NEW\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION\"/" AndroidManifest.xml
 ./build.sh
 SIZE=$(wc -c < build/baresudoku.apk | tr -d ' ')
