@@ -16,6 +16,7 @@ fi
 OUT=build
 rm -rf "$OUT"
 mkdir -p "$OUT/classes" "$OUT/dex"
+python3 scripts/i18n.py > /dev/null
 "$BT/aapt2" compile --dir res -o "$OUT/res.zip"
 "$BT/aapt2" link -o "$OUT/linked.apk" -I "$JAR" --manifest AndroidManifest.xml --proguard "$OUT/aapt.pro" "$OUT/res.zip"
 "$BT/aapt2" optimize -o "$OUT/optimized.apk" --shorten-resource-paths --collapse-resource-names "$OUT/linked.apk"
