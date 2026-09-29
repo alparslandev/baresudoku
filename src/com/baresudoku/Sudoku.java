@@ -463,4 +463,24 @@ final class Sudoku {
     boolean xWing() {
         return fish(2);
     }
+
+    boolean xyzWing() {
+        for (int p = 0; p < 81; p++) {
+            int pm = lc[p];
+            if (Integer.bitCount(pm) != 3) continue;
+            int[] peers = PEERS[p];
+            for (int a = 0; a < 20; a++) {
+                int am = lc[peers[a]];
+                if (Integer.bitCount(am) != 2 || (am & pm) != am) continue;
+                for (int b = a + 1; b < 20; b++) {
+                    int bm = lc[peers[b]];
+                    if (Integer.bitCount(bm) != 2 || (bm & pm) != bm || bm == am) continue;
+                    int z = am & bm;
+                    if (Integer.bitCount(z) != 1) continue;
+                    if (clearSeeing(z, peers[a], peers[b], p)) return true;
+                }
+            }
+        }
+        return false;
+    }
 }
