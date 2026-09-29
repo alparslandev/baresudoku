@@ -630,4 +630,29 @@ final class BoardView extends View implements Runnable {
         }
         return false;
     }
+
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        requestApplyInsets();
+    }
+
+    public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        insetL = insets.getSystemWindowInsetLeft();
+        insetT = insets.getSystemWindowInsetTop();
+        insetR = insets.getSystemWindowInsetRight();
+        insetB = insets.getSystemWindowInsetBottom();
+        if (Build.VERSION.SDK_INT >= 28) applyCutout(insets);
+        layout(getWidth(), getHeight());
+        invalidate();
+        return insets;
+    }
+
+    private void applyCutout(WindowInsets insets) {
+        DisplayCutout cutout = insets.getDisplayCutout();
+        if (cutout == null) return;
+        insetL = Math.max(insetL, cutout.getSafeInsetLeft());
+        insetT = Math.max(insetT, cutout.getSafeInsetTop());
+        insetR = Math.max(insetR, cutout.getSafeInsetRight());
+        insetB = Math.max(insetB, cutout.getSafeInsetBottom());
+    }
 }
