@@ -1,0 +1,37 @@
+{
+  "locales": {
+    "en-US": {
+      "name": "Bare Sudoku",
+      "subtitle": "No ads, no account, offline",
+      "keywords": "sudoku,puzzle,logic,no ads,free,offline,brain,numbers,game,killer",
+      "supportUrl": "https://baresudoku.com/",
+      "marketingUrl": "https://baresudoku.com/",
+      "privacyPolicyUrl": "https://baresudoku.com/privacy/",
+      "promotionalText": "Free Sudoku that respects you: no ads, no account, no tracking, works offline, and every hint explains the logic.",
+      "description": "Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet. Open it and play.\n\nFOUR LEVELS\nEasy, Medium, Hard and Expert. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess.\n\nHINTS THAT TEACH\nA hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, X-Wing, Y-Wing, Swordfish or XYZ-Wing. Tap again to place the digit.\n\nFAST INPUT\nTap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.\n\nSMALL AND HONEST\nThe whole app is about 150 KB. Your game is saved on the device and continues where you left off. Dark mode, landscape, English and Turkish. Open source under the MIT license."
+    },
+    "tr": {
+      "name": "Bare Sudoku",
+      "subtitle": "Reklamsız, çevrimdışı sudoku",
+      "keywords": "sudoku,bulmaca,mantık,reklamsız,ücretsiz,çevrimdışı,zeka,sayı,oyun",
+      "supportUrl": "https://baresudoku.com/tr/",
+      "marketingUrl": "https://baresudoku.com/tr/",
+      "privacyPolicyUrl": "https://baresudoku.com/tr/privacy/",
+      "promotionalText": "Seni rahat bırakan ücretsiz sudoku: reklam yok, hesap yok, takip yok, internetsiz çalışır, her ipucu mantığını açıklar.",
+      "description": "Bare Sudoku, önünde hiçbir engel olmayan sudoku. Reklam yok, hesap yok, takip yok, internet yok. Aç ve oyna.\n\nDÖRT SEVİYE\nKolay, Orta, Zor ve Uzman. Her bulmacanın tam olarak tek çözümü vardır ve yalnızca mantıkla çözülür; tahmin etmen gerekmez.\n\nÖĞRETEN İPUÇLARI\nİpucu doldurabileceğin sonraki hücreyi gösterir ve tekniği söyler: tek aday, satır, sütun veya kutudaki tek yer, kilitli adaylar, çift ve üçlü, X-Wing, Y-Wing, Swordfish veya XYZ-Wing. Tekrar dokun, rakam yerleşsin.\n\nHIZLI GİRİŞ\nÖnce hücre sonra rakam, ya da rakama iki kez dokunup kilitle ve art arda hücreleri doldur. Not, geri al, sil, tek dokunuşla tüm notlar, kapatılabilir hata işareti; satır, sütun, kutu ve aynı rakam vurguları.\n\nKÜÇÜK VE DÜRÜST\nUygulamanın tamamı yaklaşık 150 KB. Oyunun cihazda saklanır, kaldığın yerden devam edersin. Koyu tema, yatay ekran, Türkçe ve İngilizce. MIT lisansıyla açık kaynak."
+    }
+  },
+  "screenshots": {
+    "APP_IPHONE_69": [
+      "1-board.png",
+      "2-digit-first.png",
+      "3-hint.png",
+      "4-menu.png",
+      "5-dark.png"
+    ],
+    "APP_IPAD_PRO_3GEN_129": [],
+    "APP_DESKTOP": [],
+    "APP_APPLE_TV": [],
+    "APP_APPLE_VISION_PRO": []
+  }
+}
