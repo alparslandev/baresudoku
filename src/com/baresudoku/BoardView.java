@@ -213,17 +213,33 @@ final class BoardView extends View implements Runnable {
     protected void onDraw(Canvas c) {
         c.drawColor(cBg);
         if (game.active) drawBoard(c);
+        drawMessage(c);
+        drawTools(c);
         drawKeys(c);
     }
 
     private void drawBoard(Canvas c) {
+        int sel = game.selected;
+        int selValue = sel >= 0 ? game.value[sel] : 0;
+        int selBit = selValue == 0 ? 0 : Sudoku.bit(selValue);
+        for (int i = 0; i < 81; i++) {
+            int color = 0;
+            if (i == sel) color = cSelected;
+            else if (selValue != 0 && (game.value[i] == selValue || (game.value[i] == 0 && (game.notes[i] & selBit) != 0))) color = cSame;
+            else if (sel >= 0 && Sudoku.sees(i, sel)) color = cUnit;
+            if (color == 0) continue;
+            float x = boardX + Sudoku.COL[i] * cell;
+            float y = boardY + Sudoku.ROW[i] * cell;
+            fillRect(c, x, y, x + cell, y + cell, color, 0);
+        }
         for (int i = 0; i < 81; i++) {
             float cx = boardX + (Sudoku.COL[i] + 0.5f) * cell;
             float cy = boardY + (Sudoku.ROW[i] + 0.5f) * cell;
             int v = game.value[i];
             if (v != 0) {
                 boolean given = game.given[i] != 0;
-                drawText(c, DIGITS[v], cx, cy, cell * 0.62f, given ? cGiven : cEntered, given ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+                int color = game.conflict(i) || game.wrong(i) ? cWrong : given ? cGiven : cEntered;
+                drawText(c, DIGITS[v], cx, cy, cell * 0.62f, color, given ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
             } else if (game.notes[i] != 0) {
                 float x0 = boardX + Sudoku.COL[i] * cell;
                 float y0 = boardY + Sudoku.ROW[i] * cell;
@@ -231,11 +247,13 @@ final class BoardView extends View implements Runnable {
                     if ((game.notes[i] & Sudoku.bit(d)) == 0) continue;
                     float nx = x0 + ((d - 1) % 3 + 0.5f) * cell / 3;
                     float ny = y0 + ((d - 1) / 3 + 0.5f) * cell / 3;
-                    drawText(c, DIGITS[d], nx, ny, cell * 0.28f, cNote, Typeface.DEFAULT);
+                    boolean same = d == selValue;
+                    drawText(c, DIGITS[d], nx, ny, cell * 0.28f, same ? cEntered : cNote, same ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
                 }
             }
         }
         paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeCap(Paint.Cap.BUTT);
         for (int k = 0; k <= 9; k++) {
             boolean thick = k % 3 == 0;
             paint.setColor(thick ? cThick : cLine);
@@ -252,7 +270,7 @@ final class BoardView extends View implements Runnable {
             float x = keyX[d - 1];
             float y = keyY[d - 1];
             fillRect(c, x + inset, y + inset, x + keyW - inset, y + keyH - inset, cKey, keyW * 0.15f);
-            int left = game.active ? game.remaining(d) : 9;
+            int left = game.active ? Math.max(0, game.remaining(d)) : 9;
             drawText(c, DIGITS[d], x + keyW / 2, y + keyH * 0.42f, keyH * 0.5f, left > 0 ? cKeyText : cMuted, Typeface.DEFAULT);
             if (left > 0) drawText(c, DIGITS[left], x + keyW / 2, y + keyH * 0.8f, keyH * 0.2f, cMuted, Typeface.DEFAULT);
         }
@@ -297,11 +315,16 @@ final class BoardView extends View implements Runnable {
     private void act(int t) {
         boolean changed = false;
         if (t >= 100 && t < 109) changed = game.enter(t - 99);
+        else if (t == 200) changed = game.undo();
+        else if (t == 201) changed = game.erase();
+        else if (t == 202) game.noteMode = !game.noteMode;
+        else if (t == 203) changed = game.fillNotes();
+        else if (t == 204) changed = game.hint(MainActivity.engine);
         if (game.solved) {
             game.pause(SystemClock.elapsedRealtime());
             removeCallbacks(this);
         }
-        if (changed) MainActivity.save();
+        if (changed || t == 202) MainActivity.save();
         invalidate();
     }
 
@@ -320,6 +343,95 @@ final class BoardView extends View implements Runnable {
         if (game.running) {
             invalidate();
             postDelayed(this, 1000);
+        }
+    }
+
+    private float fit(String s, float size, float maxWidth) {
+        paint.setTextSize(size);
+        paint.setTypeface(Typeface.DEFAULT);
+        float w = paint.measureText(s);
+        return w > maxWidth ? size * maxWidth / w : size;
+    }
+
+    private String hintMessage() {
+        if (game.hintKind == Game.HINT_WRONG) return text[S_WRONG];
+        int u = game.hintUnit;
+        String s = text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : S_NAKED].replace("#", DIGITS[game.hintDigit]);
+        if (game.hintTech > 0) s = s + " (" + text[S_TECH + game.hintTech - 1] + ")";
+        return s;
+    }
+
+    private void drawMessage(Canvas c) {
+        if (!game.active || !game.hintActive()) return;
+        String first = hintMessage();
+        float cx = msgX + msgW / 2;
+        float size = msgH * 0.36f;
+        if (game.hintKind != Game.HINT_PLACE) {
+            drawText(c, first, cx, msgY + msgH / 2, fit(first, size, msgW * 0.96f), cWrong, Typeface.DEFAULT);
+            return;
+        }
+        String second = text[S_AGAIN];
+        drawText(c, first, cx, msgY + msgH * 0.3f, fit(first, size, msgW * 0.96f), cAccent, Typeface.DEFAULT);
+        drawText(c, second, cx, msgY + msgH * 0.72f, fit(second, size * 0.9f, msgW * 0.96f), cMuted, Typeface.DEFAULT);
+    }
+
+    private void drawIcon(Canvas c, int kind, float cx, float cy, float s, int color) {
+        paint.setColor(color);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(s * 0.18f);
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeJoin(Paint.Join.ROUND);
+        path.reset();
+        if (kind == 0) {
+            path.moveTo(cx + s * 0.65f, cy);
+            path.lineTo(cx - s * 0.6f, cy);
+            path.moveTo(cx - s * 0.1f, cy - s * 0.5f);
+            path.lineTo(cx - s * 0.6f, cy);
+            path.lineTo(cx - s * 0.1f, cy + s * 0.5f);
+        } else if (kind == 1) {
+            path.moveTo(cx + s * 0.686f, cy - s * 0.234f);
+            path.lineTo(cx + s * 0.234f, cy - s * 0.686f);
+            path.lineTo(cx - s * 0.686f, cy + s * 0.234f);
+            path.lineTo(cx - s * 0.234f, cy + s * 0.686f);
+            path.close();
+            path.moveTo(cx + s * 0.134f, cy + s * 0.318f);
+            path.lineTo(cx - s * 0.318f, cy - s * 0.134f);
+        } else if (kind == 2) {
+            paint.setStrokeWidth(s * 0.3f);
+            path.moveTo(cx - s * 0.3f, cy + s * 0.3f);
+            path.lineTo(cx + s * 0.5f, cy - s * 0.5f);
+            c.drawPath(path, paint);
+            path.reset();
+            paint.setStrokeWidth(s * 0.1f);
+            path.moveTo(cx - s * 0.3f, cy + s * 0.3f);
+            path.lineTo(cx - s * 0.62f, cy + s * 0.62f);
+        } else if (kind == 3) {
+            paint.setStyle(Paint.Style.FILL);
+            for (int k = 0; k < 9; k++) {
+                c.drawCircle(cx + (k % 3 - 1) * s * 0.5f, cy + (k / 3 - 1) * s * 0.5f, s * 0.12f, paint);
+            }
+            return;
+        } else {
+            c.drawCircle(cx, cy - s * 0.15f, s * 0.45f, paint);
+            path.moveTo(cx - s * 0.22f, cy + s * 0.48f);
+            path.lineTo(cx + s * 0.22f, cy + s * 0.48f);
+            path.moveTo(cx - s * 0.15f, cy + s * 0.7f);
+            path.lineTo(cx + s * 0.15f, cy + s * 0.7f);
+        }
+        c.drawPath(path, paint);
+    }
+
+    private void drawTools(Canvas c) {
+        float inset = toolW * 0.06f;
+        for (int i = 0; i < 5; i++) {
+            float x = toolX[i];
+            boolean on = (i == 2 && game.noteMode) || (i == 4 && game.active && game.hintActive() && game.hintKind == Game.HINT_PLACE);
+            boolean enabled = game.active && !game.solved && (i != 0 || !game.history.isEmpty());
+            fillRect(c, x + inset, toolY + inset, x + toolW - inset, toolY + toolH - inset, on ? cSame : cKey, toolW * 0.15f);
+            int color = !enabled ? cMuted : on ? cAccent : cKeyText;
+            drawIcon(c, i, x + toolW / 2, toolY + toolH * 0.38f, toolH * 0.3f, color);
+            String label = text[S_UNDO + i];
+            drawText(c, label, x + toolW / 2, toolY + toolH * 0.78f, fit(label, toolH * 0.17f, toolW * 0.88f), color, Typeface.DEFAULT);
         }
     }
 }
