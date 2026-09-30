@@ -5,18 +5,18 @@
 #include "Game.h"
 
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
-    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29 };
+    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32 };
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
     @"Only one candidate here: #", @"Only place for # in this row", @"Only place for # in this column",
     @"Only place for # in this box", @"Tap hint again to place it", @"Locked candidates", @"Pair or triple",
-    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Restart"};
+    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Restart", @"Row", @"Column", @"# left"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
     @"Bu kutuda # için tek yer", @"Yerleştirmek için ipucuna tekrar bas", @"Kilitli adaylar", @"Çift veya üçlü",
-    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Baştan başla"};
+    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Baştan başla", @"Satır", @"Sütun", @"# kaldı"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
@@ -90,16 +90,30 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
     CGFloat menuX, menuW, menuTop, menuRowH, menuTitleH;
     int menuRows;
     int cursor, menuCursor;
+    NSMutableDictionary *axElements;
+    NSString *axLastMessage;
 #ifdef SELFTEST
     int demoDigit;
 #endif
 }
 - (BOOL)handlePress:(UIPress *)press;
+- (void)activateTarget:(int)t;
 - (void)shown;
 - (void)hidden;
 @end
 
 static BoardView *current;
+
+@interface BoardElement : UIAccessibilityElement
+@property (nonatomic) int target;
+@end
+
+@implementation BoardElement
+- (BOOL)accessibilityActivate {
+    [(BoardView *)self.accessibilityContainer activateTarget:self.target];
+    return YES;
+}
+@end
 
 @implementation BoardView
 
@@ -395,6 +409,10 @@ static BoardView *current;
     }
     if (changed) saveGame();
     [self setNeedsDisplay];
+    NSString *message = game.active && game_hint_active(&game) ? [self hintMessage] : nil;
+    if (message && ![message isEqualToString:axLastMessage]) UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, message);
+    axLastMessage = message;
+    if (game.solved) UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
 }
 
 - (void)shown {
@@ -507,15 +525,7 @@ static BoardView *current;
         NSString *s = text[level];
         drawText(s, topX + topH * 0.2 + textWidth(s, size, 1) / 2, cy, size, cKeyText, 1);
     }
-    if (game.active && !generating) {
-        int64_t ms = game_time(&game, nowMs());
-        int64_t sec = ms / 1000, min = sec / 60;
-        sec %= 60;
-        int64_t hour = min / 60;
-        min %= 60;
-        NSString *clock = hour > 0 ? [NSString stringWithFormat:@"%lld:%02lld:%02lld", hour, min, sec] : [NSString stringWithFormat:@"%lld:%02lld", min, sec];
-        drawText(clock, topX + topW / 2, cy, size, cMuted, 2);
-    }
+    if (game.active && !generating) drawText([self clockString:game_time(&game, nowMs())], topX + topW / 2, cy, size, cMuted, 2);
     CGFloat mx = topX + topW - topH * 0.45;
     CGContextRef c = UIGraphicsGetCurrentContext();
     strokeSetup(c, cKeyText, topH * 0.07);
@@ -555,12 +565,7 @@ static BoardView *current;
     drawText(text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5, cKeyText, 1);
     y += menuRowH * 0.6;
     if (solved) {
-        int64_t sec = game_time(&game, 0) / 1000, min = sec / 60;
-        sec %= 60;
-        int64_t hour = min / 60;
-        min %= 60;
-        NSString *clock = hour > 0 ? [NSString stringWithFormat:@"%lld:%02lld:%02lld", hour, min, sec] : [NSString stringWithFormat:@"%lld:%02lld", min, sec];
-        drawText([NSString stringWithFormat:@"%@  %@", text[game.level], clock], cx, y, menuRowH * 0.38, cAccent, 0);
+        drawText([NSString stringWithFormat:@"%@  %@", text[game.level], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
         y += menuRowH * 0.6;
     }
     drawText(text[S_NEW], cx, y, menuRowH * 0.34, cMuted, 0);
@@ -568,7 +573,7 @@ static BoardView *current;
     CGFloat inset = menuRowH * 0.08;
     for (int row = 0; row < menuRows; row++) {
         CGFloat ry = [self menuRowY:row];
-        NSString *label = row < 4 ? text[row] : row == 4 ? [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]] : row == 5 ? text[S_RESTART] : text[S_CANCEL];
+        NSString *label = [self menuLabel:row];
         fillRect(menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25);
         drawText(label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4, menuW * 0.8), cKeyText, 0);
     }
@@ -613,6 +618,7 @@ static BoardView *current;
     wasGenerating = YES;
     pendingLevel = level;
     [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         Sudoku *worker = malloc(sizeof(Sudoku));
         int *puzzle = malloc(sizeof(int) * 81);
@@ -625,6 +631,7 @@ static BoardView *current;
             saveGame();
             pendingLevel = -1;
             [current setNeedsDisplay];
+            UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
         });
     });
 }
@@ -635,6 +642,7 @@ static BoardView *current;
     game_pause(&game, nowMs());
     [self stopTimer];
     [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
 }
 
 - (void)closeMenu {
@@ -642,6 +650,7 @@ static BoardView *current;
     game_resume(&game, nowMs());
     [self run];
     [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
 }
 
 - (void)moveSelection:(int)dir {
@@ -794,7 +803,121 @@ static BoardView *current;
     return NO;
 }
 
+- (NSString *)clockString:(int64_t)ms {
+    int64_t sec = ms / 1000, min = sec / 60;
+    sec %= 60;
+    int64_t hour = min / 60;
+    min %= 60;
+    return hour > 0 ? [NSString stringWithFormat:@"%lld:%02lld:%02lld", hour, min, sec] : [NSString stringWithFormat:@"%lld:%02lld", min, sec];
+}
+
+- (NSString *)menuLabel:(int)row {
+    if (row < 4) return text[row];
+    if (row == 4) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
+    return text[row == 5 ? S_RESTART : S_CANCEL];
+}
+
+- (BOOL)isAccessibilityElement {
+    return NO;
+}
+
+- (BoardElement *)axElement:(int)key frame:(CGRect)frame label:(NSString *)label value:(NSString *)value traits:(UIAccessibilityTraits)traits {
+    if (!axElements) axElements = [NSMutableDictionary dictionary];
+    BoardElement *e = axElements[@(key)];
+    if (!e) {
+        e = [[BoardElement alloc] initWithAccessibilityContainer:self];
+        e.target = key;
+        axElements[@(key)] = e;
+    }
+    e.accessibilityFrameInContainerSpace = frame;
+    e.accessibilityLabel = label;
+    e.accessibilityValue = value;
+    e.accessibilityTraits = traits;
+    return e;
+}
+
+- (NSString *)cellValue:(int)i {
+    int v = game.value[i];
+    if (v != 0) {
+        BOOL wrong = game_conflict(&game, i) || game_wrong(&game, i);
+        return wrong ? [NSString stringWithFormat:@"%@, %@", DIGITS[v], text[S_WRONG]] : DIGITS[v];
+    }
+    if (game.notes[i] == 0) return nil;
+    NSMutableString *notes = [NSMutableString stringWithString:text[S_NOTE]];
+    for (int d = 1; d <= 9; d++) if (game.notes[i] & sudoku_bit(d)) [notes appendFormat:@" %d", d];
+    return notes;
+}
+
+- (NSArray *)accessibilityElements {
+    NSMutableArray *list = [NSMutableArray array];
+    if (pendingLevel >= 0) {
+        [list addObject:[self axElement:420 frame:self.bounds label:text[S_PREPARING] value:nil traits:UIAccessibilityTraitStaticText]];
+        return list;
+    }
+    if ([self overlay]) {
+        [self layoutMenu];
+        BOOL solved = game.active && game.solved;
+        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], text[game.level], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
+        [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[NSString stringWithFormat:@"%@. %@", title, text[S_NEW]] value:nil traits:UIAccessibilityTraitHeader]];
+        for (int row = 0; row < menuRows; row++) {
+            [list addObject:[self axElement:400 + row frame:CGRectMake(menuX, [self menuRowY:row], menuW, menuRowH) label:[self menuLabel:row] value:nil traits:UIAccessibilityTraitButton]];
+        }
+        return list;
+    }
+    BOOL playable = game.active && !game.solved;
+    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", text[game.level], [self clockString:game_time(&game, nowMs())]] : @"";
+    [list addObject:[self axElement:301 frame:CGRectMake(topX, topY, topW - topH * 0.9, topH) label:top value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
+    [list addObject:[self axElement:300 frame:[self targetRect:300] label:text[S_NEW] value:nil traits:UIAccessibilityTraitButton]];
+    if (game.active && game_hint_active(&game)) {
+        NSString *message = [self hintMessage];
+        if (game.hintKind == HINT_PLACE) message = [NSString stringWithFormat:@"%@. %@", message, text[S_AGAIN]];
+        [list addObject:[self axElement:302 frame:CGRectMake(msgX, msgY, msgW, msgH) label:message value:nil traits:UIAccessibilityTraitStaticText]];
+    }
+    for (int i = 0; i < 81; i++) {
+        NSString *label = [NSString stringWithFormat:@"%@ %d, %@ %d", text[S_ROWLABEL], SUDOKU_ROW[i] + 1, text[S_COLLABEL], SUDOKU_COL[i] + 1];
+        UIAccessibilityTraits traits = UIAccessibilityTraitButton;
+        if (i == game.selected) traits |= UIAccessibilityTraitSelected;
+        if (!playable) traits |= UIAccessibilityTraitNotEnabled;
+        [list addObject:[self axElement:i frame:[self targetRect:i] label:label value:game.active ? [self cellValue:i] : nil traits:traits]];
+    }
+    for (int d = 1; d <= 9; d++) {
+        int left = game.active ? MAX(0, game_remaining(&game, d)) : 9;
+        UIAccessibilityTraits traits = UIAccessibilityTraitButton;
+        if (d == game.sticky) traits |= UIAccessibilityTraitSelected;
+        if (!playable || left == 0) traits |= UIAccessibilityTraitNotEnabled;
+        NSString *value = [text[S_LEFT] stringByReplacingOccurrencesOfString:@"#" withString:[NSString stringWithFormat:@"%d", left]];
+        [list addObject:[self axElement:99 + d frame:[self targetRect:99 + d] label:DIGITS[d] value:value traits:traits]];
+    }
+    for (int i = 0; i < 5; i++) {
+        BOOL on = (i == 2 && game.noteMode) || (i == 4 && game.active && game_hint_active(&game) && game.hintKind == HINT_PLACE);
+        BOOL enabled = playable && (i != 0 || game.histCount > 0);
+        UIAccessibilityTraits traits = UIAccessibilityTraitButton;
+        if (on) traits |= UIAccessibilityTraitSelected;
+        if (!enabled) traits |= UIAccessibilityTraitNotEnabled;
+        [list addObject:[self axElement:200 + i frame:[self targetRect:200 + i] label:text[S_UNDO + i] value:nil traits:traits]];
+    }
+    return list;
+}
+
+- (void)activateTarget:(int)t {
+    if (pendingLevel >= 0 || t < 0) return;
+    if ([self overlay]) {
+        if (t >= 400) [self menuAction:t];
+        return;
+    }
+    if (t < 81) [self finish:game_tap(&game, t)];
+    else if (t >= 100) [self act:t];
+}
+
 #ifdef SELFTEST
+- (void)axDump:(int)step {
+    if (!getenv("BARESUDOKU_AXDUMP")) return;
+    for (BoardElement *e in [self accessibilityElements]) {
+        CGRect f = e.accessibilityFrameInContainerSpace;
+        fprintf(stderr, "ax %d: %d [%s] [%s] traits=%llu frame=%.0f,%.0f %.0fx%.0f\n", step, e.target, e.accessibilityLabel.UTF8String, e.accessibilityValue.UTF8String ?: "", (unsigned long long)e.accessibilityTraits, f.origin.x, f.origin.y, f.size.width, f.size.height);
+    }
+}
+
 - (void)press:(CGPoint)p {
     [self downAt:p];
     [self upAt:p];
@@ -850,6 +973,7 @@ static BoardView *current;
     else if (step == 18) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     else if (step == 19) { [self applyTheme]; [self snapshot:@"5-dark"]; }
     NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d size=%.0fx%.0f", step, game.selected, game.sticky, game.hintKind, menuOpen, self.bounds.size.width, self.bounds.size.height);
+    [self axDump:step];
     if (step < 19) [self performSelector:@selector(demo:) withObject:@(step + 1) afterDelay:1.5];
 }
 #endif
