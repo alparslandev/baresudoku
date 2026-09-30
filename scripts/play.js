@@ -60,14 +60,25 @@ async function publish(aab, version, track, status) {
   });
 }
 
+const RETRYABLE = /draft app|precondition/i;
+
 async function release(aab, version, track) {
-  try {
-    await publish(aab, version, track, "completed");
-  } catch (e) {
-    if (!String(e.message).includes("draft app")) throw e;
-    await publish(aab, version, track, "draft");
-    console.log("Play: uygulama henuz yayinlanmamis, surum taslak olarak yuklendi; Play Console'da Surumu incele ve Yayinla ile gonder");
+  const attempts = [[track, "completed"], [track, "draft"]];
+  if (track !== "internal") attempts.push(["internal", "draft"]);
+  let last;
+  for (const [t, status] of attempts) {
+    try {
+      await publish(aab, version, t, status);
+      if (t !== track) console.log(`Play: ${track} kanali henuz acik degil, ${t} kanali kullanildi`);
+      if (status === "draft") console.log(`Play: uygulama henuz yayinlanmamis, ${version} ${t} kanalina taslak olarak yuklendi; Play Console'da Surumu incele ve Yayinla ile gonder`);
+      return;
+    } catch (e) {
+      last = e;
+      if (!RETRYABLE.test(String(e.message))) throw e;
+      console.log(`Play: ${t}/${status} reddedildi: ${String(e.message).replace(/\s+/g, " ").slice(0, 160)}`);
+    }
   }
+  throw last;
 }
 
 async function listing() {
