@@ -43,7 +43,7 @@ async function withEdit(fn) {
   await call(tok, "POST", `${API}/edits/${edit}:commit`);
 }
 
-async function release(aab, version, track) {
+async function publish(aab, version, track, status) {
   const notes = JSON.parse(readFileSync(new URL("../release-notes.json", import.meta.url), "utf8"));
   await withEdit(async (tok, edit) => {
     const bundle = await call(tok, "POST", `${UPLOAD}/edits/${edit}/bundles?uploadType=media`, readFileSync(aab), "application/octet-stream");
@@ -52,12 +52,22 @@ async function release(aab, version, track) {
       releases: [{
         name: version,
         versionCodes: [String(bundle.versionCode)],
-        status: "completed",
+        status,
         releaseNotes: Object.entries(notes).map(([lang, text]) => ({ language: PLAY_LANG[lang], text })),
       }],
     });
-    console.log(`Play: ${version} (versionCode ${bundle.versionCode}) ${track} kanalinda`);
+    console.log(`Play: ${version} (versionCode ${bundle.versionCode}) ${track} kanalinda, durum ${status}`);
   });
+}
+
+async function release(aab, version, track) {
+  try {
+    await publish(aab, version, track, "completed");
+  } catch (e) {
+    if (!String(e.message).includes("draft app")) throw e;
+    await publish(aab, version, track, "draft");
+    console.log("Play: uygulama henuz yayinlanmamis, surum taslak olarak yuklendi; Play Console'da Surumu incele ve Yayinla ile gonder");
+  }
 }
 
 async function listing() {
