@@ -1,0 +1,13 @@
+Bare Sudoku, önünde hiçbir engel olmayan sudoku. Reklam yok, hesap yok, takip yok, internet izni yok. Aç ve oyna.
+
+DÖRT SEVİYE
+Kolay, Orta, Zor ve Uzman. Her bulmacanın tam olarak tek çözümü vardır ve yalnızca mantıkla çözülür; tahmin etmen gerekmez.
+
+ÖĞRETEN İPUÇLARI
+İpucu doldurabileceğin sonraki hücreyi gösterir ve tekniği söyler: tek aday, satır, sütun veya kutudaki tek yer, kilitli adaylar, çift ve üçlü, X-Wing, Y-Wing, Swordfish veya XYZ-Wing. Tekrar dokun, rakam yerleşsin.
+
+HIZLI GİRİŞ
+Önce hücre sonra rakam, ya da rakama iki kez dokunup kilitle ve art arda hücreleri doldur. Not, geri al, sil, tek dokunuşla tüm notlar, kapatılabilir hata işareti; satır, sütun, kutu ve aynı rakam vurguları.
+
+KÜÇÜK VE DÜRÜST
+Uygulamanın tamamı yaklaşık 25 KB, bu sayfadan küçük. Hiçbir izin istemez. Oyunun cihazda saklanır, kaldığın yerden devam edersin. Koyu tema, yatay ekran, Türkçe ve İngilizce. MIT lisansıyla açık kaynak: github.com/alparslandev/baresudoku

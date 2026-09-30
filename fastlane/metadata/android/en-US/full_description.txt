@@ -1,0 +1,13 @@
+Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet permission. Open it and play.
+
+FOUR LEVELS
+Easy, Medium, Hard and Expert. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess.
+
+HINTS THAT TEACH
+A hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, X-Wing, Y-Wing, Swordfish or XYZ-Wing. Tap again to place the digit.
+
+FAST INPUT
+Tap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.
+
+SMALL AND HONEST
+The whole app is about 25 KB, smaller than this page. No permissions at all. Your game is saved on the device and continues where you left off. Dark mode, landscape, English and Turkish. Open source under the MIT license: github.com/alparslandev/baresudoku
