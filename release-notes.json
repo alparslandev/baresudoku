@@ -1,4 +1,4 @@
 {
-  "en": "Digit lock no longer keeps a cell selected; the board highlights the locked digit. Restart the same puzzle from the menu.",
-  "tr": "Rakam kilidi artık hücreyi seçili bırakmıyor, tahta kilitli rakamı vurguluyor. Menüden aynı bulmacaya baştan başlanabiliyor."
+  "en": "Screen reader support (VoiceOver, TalkBack): every cell, key and menu item is announced, hints are read aloud, and the board can be played with a keyboard.",
+  "tr": "Ekran okuyucu desteği (VoiceOver, TalkBack): her hücre, tuş ve menü öğesi seslendirilir, ipuçları okunur, tahta klavyeyle oynanabilir."
 }
