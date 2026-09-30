@@ -94,9 +94,19 @@ async function setWhatsNew(vid) {
   }
 }
 
+async function cancelSubmissions(app, platform) {
+  const active = (await api("GET", `/reviewSubmissions?filter[app]=${app}&filter[platform]=${platform}&filter[state]=WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES`)).data;
+  for (const s of active) {
+    await api("PATCH", `/reviewSubmissions/${s.id}`, { data: { type: "reviewSubmissions", id: s.id, attributes: { canceled: true } } });
+    console.log(`${platform}: onceki gonderim (${s.attributes.state}) iptal edildi`);
+  }
+  if (active.length) await sleep(5000);
+}
+
 async function submit(version, build, platform) {
   const app = await appId();
   const buildId = await waitBuild(app, platform, version, build);
+  await cancelSubmissions(app, platform);
   const vid = await versionFor(app, platform, version);
   await api("PATCH", `/appStoreVersions/${vid}/relationships/build`, { data: { type: "builds", id: buildId } });
   const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
