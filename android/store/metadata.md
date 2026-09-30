@@ -1,6 +1,6 @@
 # Google Play listing
 
-Package com.baresudoku. Upload key `~/.baresudoku/release.jks` (alias baresudoku, valid until 2054), Play App Signing on. Bundle: `bun run aab` writes `android/build/bundle/baresudoku.aab`; the first upload is done by hand in Play Console (Google does not allow it through the API), later ones by `bun run deploy`. Free, all countries. Default language English (United States).
+Package com.baresudoku. Upload key `~/.baresudoku/release.jks` (alias baresudoku, valid until 2054), Play App Signing on. Bundle: `bun run aab` writes `android/build/bundle/baresudoku.aab`; until the app has been published once, Google rejects completed releases through the API, so `bun run deploy` uploads a draft release instead and the rollout is done by hand in Play Console; after that every deploy releases to production. Free, all countries. Default language English (United States).
 
 Texts (title, short description, full description; en-US and tr-TR) live in `listing.json`; `bun scripts/play.js listing` uploads them with the icon, feature graphic and screenshots below. Release notes for both stores come from `release-notes.json` in the repository root.
 
