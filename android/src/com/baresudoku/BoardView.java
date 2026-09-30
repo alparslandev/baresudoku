@@ -1,9 +1,11 @@
 package com.baresudoku;
 
+import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
@@ -12,6 +14,9 @@ import android.view.DisplayCutout;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
+import android.view.accessibility.AccessibilityNodeProvider;
 import java.util.Locale;
 
 final class BoardView extends View implements Runnable {
@@ -36,16 +41,19 @@ final class BoardView extends View implements Runnable {
     static final int S_TECH = 22;
     static final int S_TITLE = 28;
     static final int S_RESTART = 29;
+    static final int S_ROWLABEL = 30;
+    static final int S_COLLABEL = 31;
+    static final int S_LEFT = 32;
     static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
         "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
         "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
         "Only place for # in this box", "Tap hint again to place it", "Locked candidates", "Pair or triple",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Restart"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Restart", "Row", "Column", "# left"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
         "Bu kutuda # için tek yer", "Yerleştirmek için ipucuna tekrar bas", "Kilitli adaylar", "Çift veya üçlü",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Baştan başla"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Baştan başla", "Satır", "Sütun", "# kaldı"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -98,6 +106,9 @@ final class BoardView extends View implements Runnable {
     float keyH;
     boolean menuOpen;
     int downTarget = -1;
+    BoardNodes nodes;
+    int hovered = -1;
+    String axLastMessage;
 
     BoardView(MainActivity activity) {
         super(activity);
@@ -247,6 +258,7 @@ final class BoardView extends View implements Runnable {
             wasGenerating = false;
             game.resume(SystemClock.elapsedRealtime());
             run();
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
         }
         drawTop(c, generating);
         if (generating) {
@@ -388,6 +400,10 @@ final class BoardView extends View implements Runnable {
         }
         if (changed) MainActivity.save();
         invalidate();
+        String message = game.active && game.hintActive() ? hintMessage() : null;
+        if (message != null && !message.equals(axLastMessage)) announceForAccessibility(message);
+        axLastMessage = message;
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
     void shown() {
@@ -575,7 +591,7 @@ final class BoardView extends View implements Runnable {
         float inset = menuRowH * 0.08f;
         for (int row = 0; row < menuRows; row++) {
             float ry = menuRowY(row);
-            String label = row < 4 ? text[row] : row == 4 ? text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF] : row == 5 ? text[S_RESTART] : text[S_CANCEL];
+            String label = menuLabel(row);
             fillRect(c, menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25f);
             drawText(c, label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4f, menuW * 0.8f), cKeyText, Typeface.DEFAULT);
         }
@@ -616,6 +632,7 @@ final class BoardView extends View implements Runnable {
         wasGenerating = true;
         host.generate(level);
         invalidate();
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
     private void openMenu() {
@@ -623,6 +640,7 @@ final class BoardView extends View implements Runnable {
         game.pause(SystemClock.elapsedRealtime());
         removeCallbacks(this);
         invalidate();
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
     private void closeMenu() {
@@ -630,6 +648,146 @@ final class BoardView extends View implements Runnable {
         game.resume(SystemClock.elapsedRealtime());
         run();
         invalidate();
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+    }
+
+    private String menuLabel(int row) {
+        if (row < 4) return text[row];
+        if (row == 4) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
+        return text[row == 5 ? S_RESTART : S_CANCEL];
+    }
+
+    public AccessibilityNodeProvider getAccessibilityNodeProvider() {
+        if (nodes == null) nodes = new BoardNodes(this);
+        return nodes;
+    }
+
+    public boolean dispatchHoverEvent(MotionEvent e) {
+        AccessibilityManager manager = (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE);
+        if (!manager.isTouchExplorationEnabled()) return super.dispatchHoverEvent(e);
+        int t = e.getActionMasked() == MotionEvent.ACTION_HOVER_EXIT ? -1 : axTargetAt(e.getX(), e.getY());
+        if (t != hovered) {
+            if (hovered >= 0) axEvent(hovered, AccessibilityEvent.TYPE_VIEW_HOVER_EXIT);
+            if (t >= 0) axEvent(t, AccessibilityEvent.TYPE_VIEW_HOVER_ENTER);
+            hovered = t;
+        }
+        return true;
+    }
+
+    int axTargetAt(float x, float y) {
+        if (MainActivity.pendingLevel >= 0) return -1;
+        if (overlay()) {
+            int t = menuTarget(x, y);
+            return t >= 400 && t < 400 + menuRows ? t : -1;
+        }
+        return target(x, y);
+    }
+
+    void axEvent(int id, int type) {
+        if (getParent() == null) return;
+        AccessibilityEvent event = AccessibilityEvent.obtain(type);
+        event.setSource(this, id);
+        event.setPackageName(getContext().getPackageName());
+        event.setClassName(axClass(id));
+        event.getText().add(axLabel(id));
+        getParent().requestSendAccessibilityEvent(this, event);
+    }
+
+    int[] axTargets() {
+        if (MainActivity.pendingLevel >= 0) return new int[] {420};
+        if (overlay()) {
+            layoutMenu(getWidth(), getHeight());
+            int[] ids = new int[menuRows + 1];
+            ids[0] = 410;
+            for (int row = 0; row < menuRows; row++) ids[row + 1] = 400 + row;
+            return ids;
+        }
+        boolean hint = game.active && game.hintActive();
+        int[] ids = new int[hint ? 98 : 97];
+        int n = 0;
+        ids[n++] = 301;
+        ids[n++] = 300;
+        if (hint) ids[n++] = 302;
+        for (int i = 0; i < 81; i++) ids[n++] = i;
+        for (int d = 1; d <= 9; d++) ids[n++] = 99 + d;
+        for (int i = 0; i < 5; i++) ids[n++] = 200 + i;
+        return ids;
+    }
+
+    String axClass(int id) {
+        return id == 301 || id == 302 || id == 410 || id == 420 ? "android.widget.TextView" : "android.widget.Button";
+    }
+
+    String axLabel(int id) {
+        if (id == 420) return text[S_PREPARING];
+        if (id == 410) {
+            boolean solved = game.active && game.solved;
+            String title = solved ? text[S_SOLVED] + " " + text[game.level] + " " + clock(game.time(0)) : text[S_TITLE];
+            return title + ". " + text[S_NEW];
+        }
+        if (id >= 400) return menuLabel(id - 400);
+        if (id == 301) return game.active ? text[game.level] + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
+        if (id == 300) return text[S_NEW];
+        if (id == 302) {
+            String message = hintMessage();
+            return game.hintKind == Game.HINT_PLACE ? message + ". " + text[S_AGAIN] : message;
+        }
+        if (id >= 200) return text[S_UNDO + id - 200];
+        if (id >= 100) {
+            int left = game.active ? Math.max(0, game.remaining(id - 99)) : 9;
+            return DIGITS[id - 99] + ", " + text[S_LEFT].replace("#", Integer.toString(left));
+        }
+        String label = text[S_ROWLABEL] + " " + (Sudoku.ROW[id] + 1) + ", " + text[S_COLLABEL] + " " + (Sudoku.COL[id] + 1);
+        if (!game.active) return label;
+        int v = game.value[id];
+        if (v != 0) return label + ", " + DIGITS[v] + (game.conflict(id) || game.wrong(id) ? ", " + text[S_WRONG] : "");
+        if (game.notes[id] == 0) return label;
+        StringBuilder notes = new StringBuilder(label).append(", ").append(text[S_NOTE]);
+        for (int d = 1; d <= 9; d++) if ((game.notes[id] & Sudoku.bit(d)) != 0) notes.append(' ').append(d);
+        return notes.toString();
+    }
+
+    boolean axEnabled(int id) {
+        boolean playable = game.active && !game.solved;
+        if (id < 81) return playable;
+        if (id < 109) return playable && game.remaining(id - 99) > 0;
+        if (id < 205) return playable && (id != 200 || !game.history.isEmpty());
+        return true;
+    }
+
+    boolean axSelected(int id) {
+        if (id < 81) return id == game.selected;
+        if (id < 109) return id - 99 == game.sticky;
+        if (id == 202) return game.noteMode;
+        if (id == 204) return game.active && game.hintActive() && game.hintKind == Game.HINT_PLACE;
+        return false;
+    }
+
+    Rect axRect(int id) {
+        if (id == 420) return new Rect(0, 0, getWidth(), getHeight());
+        if (id == 410) return new Rect((int) menuX, (int) menuTop, (int) (menuX + menuW), (int) (menuTop + menuTitleH));
+        if (id >= 400) {
+            float ry = menuRowY(id - 400);
+            return new Rect((int) menuX, (int) ry, (int) (menuX + menuW), (int) (ry + menuRowH));
+        }
+        if (id == 301) return new Rect((int) topX, (int) topY, (int) (topX + topW - topH * 0.9f), (int) (topY + topH));
+        if (id == 300) return new Rect((int) (topX + topW - topH * 0.9f), (int) topY, (int) (topX + topW), (int) (topY + topH));
+        if (id == 302) return new Rect((int) msgX, (int) msgY, (int) (msgX + msgW), (int) (msgY + msgH));
+        if (id >= 200) return new Rect((int) toolX[id - 200], (int) toolY, (int) (toolX[id - 200] + toolW), (int) (toolY + toolH));
+        if (id >= 100) return new Rect((int) keyX[id - 100], (int) keyY[id - 100], (int) (keyX[id - 100] + keyW), (int) (keyY[id - 100] + keyH));
+        float x = boardX + Sudoku.COL[id] * cell;
+        float y = boardY + Sudoku.ROW[id] * cell;
+        return new Rect((int) x, (int) y, (int) (x + cell), (int) (y + cell));
+    }
+
+    void activate(int t) {
+        if (MainActivity.pendingLevel >= 0 || t < 0) return;
+        if (overlay()) {
+            if (t >= 400) menuAction(t);
+            return;
+        }
+        if (t < 81) finish(game.tap(t));
+        else if (t >= 100 && t <= 300) act(t);
     }
 
     boolean back() {
