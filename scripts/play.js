@@ -5,6 +5,7 @@ const PKG = "com.baresudoku";
 const API = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PKG}`;
 const UPLOAD = `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/${PKG}`;
 const STORE = new URL("../android/store/", import.meta.url);
+const MANIFEST = new URL("../android/AndroidManifest.xml", import.meta.url);
 const PLAY_LANG = { en: "en-US", tr: "tr-TR" };
 const b64 = s => Buffer.from(s).toString("base64url");
 
@@ -43,20 +44,37 @@ async function withEdit(fn) {
   await call(tok, "POST", `${API}/edits/${edit}:commit`);
 }
 
+function manifestVersionCode() {
+  return readFileSync(MANIFEST, "utf8").match(/android:versionCode="(\d+)"/)[1];
+}
+
+async function upload(tok, edit, aab) {
+  try {
+    return String((await call(tok, "POST", `${UPLOAD}/edits/${edit}/bundles?uploadType=media`, readFileSync(aab), "application/octet-stream")).versionCode);
+  } catch (e) {
+    if (!/already been used/.test(String(e.message))) throw e;
+    const code = manifestVersionCode();
+    const existing = (await call(tok, "GET", `${API}/edits/${edit}/bundles`)).bundles || [];
+    if (!existing.some(b => String(b.versionCode) === code)) throw e;
+    console.log(`Play: versionCode ${code} zaten yuklu, mevcut paket kullaniliyor`);
+    return code;
+  }
+}
+
 async function publish(aab, version, track, status) {
   const notes = JSON.parse(readFileSync(new URL("../release-notes.json", import.meta.url), "utf8"));
   await withEdit(async (tok, edit) => {
-    const bundle = await call(tok, "POST", `${UPLOAD}/edits/${edit}/bundles?uploadType=media`, readFileSync(aab), "application/octet-stream");
+    const versionCode = await upload(tok, edit, aab);
     await call(tok, "PUT", `${API}/edits/${edit}/tracks/${track}`, {
       track,
       releases: [{
         name: version,
-        versionCodes: [String(bundle.versionCode)],
+        versionCodes: [versionCode],
         status,
         releaseNotes: Object.entries(notes).map(([lang, text]) => ({ language: PLAY_LANG[lang], text })),
       }],
     });
-    console.log(`Play: ${version} (versionCode ${bundle.versionCode}) ${track} kanalinda, durum ${status}`);
+    console.log(`Play: ${version} (versionCode ${versionCode}) ${track} kanalinda, durum ${status}`);
   });
 }
 
