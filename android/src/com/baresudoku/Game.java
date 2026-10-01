@@ -286,7 +286,7 @@ final class Game {
             int lvl = Integer.parseInt(f[1]);
             int sel = Integer.parseInt(f[5]);
             long time = Long.parseLong(f[6]);
-            if (lvl < 0 || lvl > 3 || sel < NONE || sel > 80 || time < 0) return false;
+            if (lvl < 0 || lvl >= Sudoku.LEVELS || sel < NONE || sel > 80 || time < 0) return false;
             readDigits(f[7], given);
             readDigits(f[8], solution);
             readDigits(f[9], value);

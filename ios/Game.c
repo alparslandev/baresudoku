@@ -329,7 +329,7 @@ int game_decode(Game *g, const char *text) {
         time = strtoll(f[6], &end, 10);
         if (*f[6] == 0 || *end != 0) goto done;
     }
-    if (lvl < 0 || lvl > 3 || sel < GAME_NONE || sel > 80 || time < 0) goto done;
+    if (lvl < 0 || lvl >= SUDOKU_LEVELS || sel < GAME_NONE || sel > 80 || time < 0) goto done;
     if (!readDigits(f[7], g->given) || !readDigits(f[8], g->solution) || !readDigits(f[9], g->value)) goto done;
     if (strlen(f[10]) != 243) goto done;
     for (int i = 0; i < 81; i++) {
