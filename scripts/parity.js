@@ -4,10 +4,19 @@ const path = require('path');
 const { Sudoku } = require(path.resolve(process.argv[2]));
 const count = +process.argv[3] || 1000;
 const file = process.argv[4];
+const off = (process.argv[5] || '').split(',').filter(Boolean).map(Number);
+
+const HARDEST = [
+  '100007090030020008009600500005300900010080002600004000300000010040000007007000300',
+  '100000002090400050006000700050903000000070000000850040700000600030009080002000001',
+  '000000039000001005003050800008090006070002000100400000009080050020000600400700000',
+  '000000012000000003002300400001800005060070800000009000008500000900040500470006000',
+  '800000000003600000070090200050007000000045700000100030001000068008500010090000400'
+];
 
 const e = new Sudoku();
-const lines = [];
-for (let i = 0; i < count; i++) {
+const lines = HARDEST.slice();
+for (let i = 0; i < count && !fs.existsSync(file); i++) {
   const puzzle = e.fullGrid();
   const order = [];
   for (let c = 0; c < 81; c++) order.push(c);
@@ -19,7 +28,9 @@ for (let i = 0; i < count; i++) {
   }
   lines.push(puzzle.join(''));
 }
-fs.writeFileSync(file, lines.join('\n') + '\n');
+if (fs.existsSync(file)) lines.splice(0, lines.length, ...fs.readFileSync(file, 'utf8').trim().split('\n'));
+else fs.writeFileSync(file, lines.join('\n') + '\n');
+for (const id of off) e.techOff[id] = 1;
 
 let h1 = 0, h2 = 0;
 const mix = x => {

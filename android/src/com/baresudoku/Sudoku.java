@@ -34,10 +34,10 @@ final class Sudoku {
         }
     }
 
-    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56};
+    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82};
     static final int TECH_COUNT = TECH_BASE.length;
     static final int MASTER_RATING = 65;
-    static final int LEVELS = 4;
+    static final int LEVELS = 5;
     static final int[] TECH_ORDER = new int[TECH_COUNT];
     static final int EXPERT_LIMIT;
 
@@ -1089,7 +1089,711 @@ final class Sudoku {
         return false;
     }
 
+    static final int NODES = 1215;
+    static final int STATES = NODES * 2;
+    static final int MAX_LINKS = 131072;
+    static final int MAX_ALS = 1024;
+    static final int MAX_ALS_LINKS = 131072;
+    static final int[] PEER_SET = new int[243];
+
+    static {
+        for (int c = 0; c < 81; c++) {
+            for (int p : PEERS[c]) PEER_SET[c * 3 + p / 27] |= 1 << (p % 27);
+        }
+    }
+
+    static int positionIn(int c, int u) {
+        return u < 9 ? COL[c] : u < 18 ? ROW[c] : (ROW[c] % 3) * 3 + COL[c] % 3;
+    }
+
+    static int chainBonus(int links) {
+        return links > 4 ? Math.min(10, (links - 4) >> 1) : 0;
+    }
+
+    private final int[] unitPos = new int[243];
+    private final int[] digitCells = new int[27];
+    private int groupCount;
+    private final int[] groupFirst = new int[11];
+    private final int[] groupDigit = new int[486];
+    private final int[] groupCells = new int[1458];
+    private final int[] groupSize = new int[486];
+    private final int[] groupBox = new int[486];
+    private final int[] groupLine = new int[486];
+    private final int[] groupSeen = new int[1458];
+    private final int[] groupAt = new int[486];
+    private final int[] linkStart = new int[STATES + 1];
+    private final int[] linkTo = new int[MAX_LINKS];
+    private final int[] mark = new int[STATES];
+    private int markValue;
+    private final int[] depth = new int[STATES];
+    private final int[] parent = new int[STATES];
+    private final int[] queue = new int[STATES];
+    private final int[] elimTry = new int[81];
+    private final int[] elimBest = new int[81];
+    private final int[] inter = new int[3];
+    private final int[] lineRest = new int[6];
+    private final int[] boxRest = new int[6];
+    private final int[] lineUnion = new int[64];
+    private final int[] boxUnion = new int[64];
+    private int alsCount;
+    private final int[] alsDigits = new int[MAX_ALS];
+    private final int[] alsCells = new int[MAX_ALS * 3];
+    private final int[] alsDigitCells = new int[MAX_ALS * 27];
+    private final int[] alsSeen = new int[MAX_ALS * 27];
+    private final int[] alsLinkStart = new int[MAX_ALS + 1];
+    private final int[] alsLinkTo = new int[MAX_ALS_LINKS];
+    private final int[] alsLinkMask = new int[MAX_ALS_LINKS];
+    private final int[] petals = new int[MAX_ALS * 9];
+    private final int[] petalStart = new int[10];
+    private final int[] alsMark = new int[MAX_ALS * 9];
+    private int alsMarkValue;
+    private final int[] alsFirst = new int[MAX_ALS * 9];
+    private final int[] alsDepth = new int[MAX_ALS * 9];
+    private final int[] alsQueue = new int[MAX_ALS * 9];
+
+    private void prepareUnits() {
+        for (int u = 0; u < 27; u++) {
+            for (int d = 1; d <= 9; d++) unitPos[u * 9 + d - 1] = unitMask(UNITS[u], bit(d));
+        }
+        Arrays.fill(digitCells, 0);
+        for (int c = 0; c < 81; c++) {
+            for (int rest = lc[c]; rest != 0; rest &= rest - 1) digitCells[Integer.numberOfTrailingZeros(rest) * 3 + c / 27] |= 1 << (c % 27);
+        }
+    }
+
+    private void prepareGroups() {
+        int n = 0;
+        Arrays.fill(groupAt, -1);
+        for (int d = 1; d <= 9; d++) {
+            int b = bit(d);
+            groupFirst[d] = n;
+            for (int box = 0; box < 9; box++) {
+                int top = (box / 3) * 3;
+                int left = (box % 3) * 3;
+                for (int seg = 0; seg < 6; seg++) {
+                    int size = 0;
+                    for (int k = 0; k < 3; k++) {
+                        int c = seg < 3 ? (top + seg) * 9 + left + k : (top + k) * 9 + left + seg - 3;
+                        if ((lc[c] & b) != 0) groupCells[n * 3 + size++] = c;
+                    }
+                    if (size < 2) continue;
+                    groupDigit[n] = d;
+                    groupSize[n] = size;
+                    groupBox[n] = box;
+                    groupLine[n] = seg < 3 ? top + seg : 9 + left + seg - 3;
+                    for (int w = 0; w < 3; w++) {
+                        int seen = -1;
+                        for (int k = 0; k < size; k++) seen &= PEER_SET[groupCells[n * 3 + k] * 3 + w];
+                        groupSeen[n * 3 + w] = seen;
+                    }
+                    groupAt[(d - 1) * 54 + box * 6 + seg] = n;
+                    n++;
+                }
+            }
+        }
+        groupFirst[10] = n;
+        groupCount = n;
+    }
+
+    private int restNode(int u, int d, int rest, boolean grouped) {
+        if (rest == 0) return -1;
+        int[] cells = UNITS[u];
+        if (Integer.bitCount(rest) == 1) return cells[Integer.numberOfTrailingZeros(rest)] * 9 + d - 1;
+        if (!grouped) return -1;
+        int first = cells[Integer.numberOfTrailingZeros(rest)];
+        boolean sameBox = true;
+        boolean sameRow = true;
+        boolean sameCol = true;
+        for (int m = rest & (rest - 1); m != 0; m &= m - 1) {
+            int c = cells[Integer.numberOfTrailingZeros(m)];
+            if (BOX[c] != BOX[first]) sameBox = false;
+            if (ROW[c] != ROW[first]) sameRow = false;
+            if (COL[c] != COL[first]) sameCol = false;
+        }
+        if (!sameBox || (!sameRow && !sameCol)) return -1;
+        int g = groupAt[(d - 1) * 54 + BOX[first] * 6 + (sameRow ? ROW[first] % 3 : 3 + COL[first] % 3)];
+        return g >= 0 && groupSize[g] == Integer.bitCount(rest) ? 729 + g : -1;
+    }
+
+    private int addLink(int n, int state) {
+        if (n >= MAX_LINKS) return n;
+        linkTo[n] = state;
+        return n + 1;
+    }
+
+    private boolean linked(int from, int to, int state) {
+        for (int k = from; k < to; k++) if (linkTo[k] == state) return true;
+        return false;
+    }
+
+    private boolean seesGroup(int c, int g) {
+        return (groupSeen[g * 3 + c / 27] & (1 << (c % 27))) != 0;
+    }
+
+    private boolean groupWithin(int h, int g) {
+        for (int i = 0; i < groupSize[h]; i++) if (!seesGroup(groupCells[h * 3 + i], g)) return false;
+        return true;
+    }
+
+    private void buildLinks(int id) {
+        boolean grouped = id == 31;
+        boolean units = id != 28;
+        boolean bivalue = id != 27;
+        boolean mates = id >= 29;
+        int n = 0;
+        for (int node = 0; node < NODES; node++) {
+            linkStart[node * 2] = n;
+            if (node < 729) {
+                int c = node / 9;
+                int d = node % 9 + 1;
+                int b = bit(d);
+                boolean alive = (lc[c] & b) != 0;
+                if (alive && units) {
+                    int first = n;
+                    for (int k = 0; k < 3; k++) {
+                        int u = k == 0 ? ROW[c] : k == 1 ? 9 + COL[c] : 18 + BOX[c];
+                        int target = restNode(u, d, unitPos[u * 9 + d - 1] & ~(1 << positionIn(c, u)), grouped);
+                        if (target >= 0 && !linked(first, n, target * 2 + 1)) n = addLink(n, target * 2 + 1);
+                    }
+                }
+                if (alive && bivalue && Integer.bitCount(lc[c]) == 2) n = addLink(n, (c * 9 + Integer.numberOfTrailingZeros(lc[c] & ~b)) * 2 + 1);
+                linkStart[node * 2 + 1] = n;
+                if (!alive) continue;
+                for (int p : PEERS[c]) if ((lc[p] & b) != 0) n = addLink(n, (p * 9 + d - 1) * 2);
+                if (mates) {
+                    for (int rest = lc[c] & ~b; rest != 0; rest &= rest - 1) n = addLink(n, (c * 9 + Integer.numberOfTrailingZeros(rest)) * 2);
+                }
+                if (grouped) {
+                    for (int g = groupFirst[d]; g < groupFirst[d + 1]; g++) if (seesGroup(c, g)) n = addLink(n, (729 + g) * 2);
+                }
+            } else {
+                int g = node - 729;
+                boolean alive = g < groupCount;
+                int d = alive ? groupDigit[g] : 0;
+                if (alive) {
+                    int first = n;
+                    for (int k = 0; k < 2; k++) {
+                        int u = k == 0 ? groupLine[g] : 18 + groupBox[g];
+                        int own = 0;
+                        for (int i = 0; i < groupSize[g]; i++) own |= 1 << positionIn(groupCells[g * 3 + i], u);
+                        int target = restNode(u, d, unitPos[u * 9 + d - 1] & ~own, true);
+                        if (target >= 0 && !linked(first, n, target * 2 + 1)) n = addLink(n, target * 2 + 1);
+                    }
+                }
+                linkStart[node * 2 + 1] = n;
+                if (!alive) continue;
+                for (int p = 0; p < 81; p++) if ((lc[p] & bit(d)) != 0 && seesGroup(p, g)) n = addLink(n, (p * 9 + d - 1) * 2);
+                for (int h = groupFirst[d]; h < groupFirst[d + 1]; h++) if (h != g && groupWithin(h, g)) n = addLink(n, (729 + h) * 2);
+            }
+        }
+        linkStart[STATES] = n;
+    }
+
+    private int nodeDigit(int node) {
+        return node < 729 ? node % 9 + 1 : groupDigit[node - 729];
+    }
+
+    private int seenWord(int node, int w) {
+        return node < 729 ? PEER_SET[(node / 9) * 3 + w] : groupSeen[(node - 729) * 3 + w];
+    }
+
+    private boolean targets(int s, int n, boolean write) {
+        int ds = nodeDigit(s);
+        int dn = nodeDigit(n);
+        boolean any = false;
+        if (write) Arrays.fill(elimTry, 0);
+        if (ds == dn) {
+            for (int w = 0; w < 3; w++) {
+                int m = seenWord(s, w) & seenWord(n, w) & digitCells[(ds - 1) * 3 + w];
+                if (m == 0) continue;
+                if (!write) return true;
+                any = true;
+                for (; m != 0; m &= m - 1) elimTry[w * 27 + Integer.numberOfTrailingZeros(m)] |= bit(ds);
+            }
+        }
+        if (s < 729 && n < 729) {
+            int sc = s / 9;
+            int nc = n / 9;
+            if (sc == nc) {
+                int rest = lc[sc] & ~bit(ds) & ~bit(dn);
+                if (rest != 0) {
+                    if (!write) return true;
+                    any = true;
+                    elimTry[sc] |= rest;
+                }
+            } else if (ds != dn && SEE[sc * 81 + nc]) {
+                if ((lc[sc] & bit(dn)) != 0) {
+                    if (!write) return true;
+                    any = true;
+                    elimTry[sc] |= bit(dn);
+                }
+                if ((lc[nc] & bit(ds)) != 0) {
+                    if (!write) return true;
+                    any = true;
+                    elimTry[nc] |= bit(ds);
+                }
+            }
+        } else if (ds != dn && (s < 729 || n < 729)) {
+            int single = s < 729 ? s : n;
+            int group = s < 729 ? n - 729 : s - 729;
+            int c = single / 9;
+            int dg = groupDigit[group];
+            if ((lc[c] & bit(dg)) != 0 && seesGroup(c, group)) {
+                if (!write) return true;
+                any = true;
+                elimTry[c] |= bit(dg);
+            }
+        }
+        return any;
+    }
+
+    private void weakElims(int x, int y) {
+        int xc = x / 9;
+        int yc = y / 9;
+        int xd = x % 9;
+        int yd = y % 9;
+        if (xc == yc) {
+            elimTry[xc] |= lc[xc] & ~(1 << xd) & ~(1 << yd);
+            return;
+        }
+        for (int w = 0; w < 3; w++) {
+            for (int m = PEER_SET[xc * 3 + w] & PEER_SET[yc * 3 + w] & digitCells[xd * 3 + w]; m != 0; m &= m - 1) {
+                elimTry[w * 27 + Integer.numberOfTrailingZeros(m)] |= 1 << xd;
+            }
+        }
+    }
+
+    private boolean loopTargets(int s, int end) {
+        int n = end >> 1;
+        if (n == s) return false;
+        int sc = s / 9;
+        int nc = n / 9;
+        int sd = s % 9;
+        int nd = n % 9;
+        if (sc == nc ? sd == nd : sd != nd || !SEE[sc * 81 + nc]) return false;
+        Arrays.fill(elimTry, 0);
+        weakElims(n, s);
+        for (int st = end; parent[st] >= 0; st = parent[st]) {
+            int pa = parent[st];
+            if ((pa & 1) != 0 && (st & 1) == 0) weakElims(pa >> 1, st >> 1);
+        }
+        for (int c = 0; c < 81; c++) if (elimTry[c] != 0) return true;
+        return false;
+    }
+
+    private int chainFrom(int s, boolean loop, int limit) {
+        if (++markValue >= 0x7fffffff) {
+            Arrays.fill(mark, 0);
+            markValue = 1;
+        }
+        int stamp = markValue;
+        int origin = s * 2;
+        mark[origin] = stamp;
+        depth[origin] = 0;
+        parent[origin] = -1;
+        int head = 0;
+        int tail = 0;
+        queue[tail++] = origin;
+        while (head < tail) {
+            int st = queue[head++];
+            int d = depth[st] + 1;
+            if (d >= limit) break;
+            for (int k = linkStart[st]; k < linkStart[st + 1]; k++) {
+                int ch = linkTo[k];
+                if (mark[ch] == stamp) continue;
+                mark[ch] = stamp;
+                depth[ch] = d;
+                parent[ch] = st;
+                queue[tail++] = ch;
+                if ((ch & 1) == 0) continue;
+                if (loop ? loopTargets(s, ch) : targets(s, ch >> 1, false) && targets(s, ch >> 1, true)) {
+                    System.arraycopy(elimTry, 0, elimBest, 0, 81);
+                    return d;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private boolean chains(int id) {
+        prepareUnits();
+        if (id == 31) prepareGroups();
+        else groupCount = 0;
+        buildLinks(id);
+        int loop = id == 29 ? 1 : 0;
+        int none = 0x7fffffff;
+        int best = none;
+        int nodes = 729 + groupCount;
+        for (int s = 0; s < nodes; s++) {
+            if (linkStart[s * 2] == linkStart[s * 2 + 1]) continue;
+            int found = chainFrom(s, loop == 1, best - loop);
+            if (found != 0) best = found + loop;
+        }
+        if (best == none) return false;
+        for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
+        stepRating = TECH_BASE[id] + chainBonus(best);
+        return true;
+    }
+
+    boolean sueDeCoq() {
+        for (int box = 0; box < 9; box++) {
+            for (int t = 0; t < 2; t++) {
+                for (int i = 0; i < 3; i++) {
+                    int line = t == 0 ? (box / 3) * 3 + i : 9 + (box % 3) * 3 + i;
+                    int ni = 0;
+                    int nl = 0;
+                    int nb = 0;
+                    for (int k = 0; k < 9; k++) {
+                        int c = UNITS[line][k];
+                        if (lc[c] == 0) continue;
+                        if (BOX[c] == box) inter[ni++] = c;
+                        else lineRest[nl++] = c;
+                    }
+                    if (ni < 2) continue;
+                    for (int k = 0; k < 9; k++) {
+                        int c = UNITS[18 + box][k];
+                        if (lc[c] != 0 && (t == 0 ? ROW[c] != line : COL[c] != line - 9)) boxRest[nb++] = c;
+                    }
+                    lineUnion[0] = 0;
+                    for (int a = 1; a < (1 << nl); a++) lineUnion[a] = lineUnion[a & (a - 1)] | lc[lineRest[Integer.numberOfTrailingZeros(a)]];
+                    boxUnion[0] = 0;
+                    for (int a = 1; a < (1 << nb); a++) boxUnion[a] = boxUnion[a & (a - 1)] | lc[boxRest[Integer.numberOfTrailingZeros(a)]];
+                    for (int cs = 3; cs < (1 << ni); cs++) {
+                        int size = Integer.bitCount(cs);
+                        if (size < 2) continue;
+                        int v = 0;
+                        for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) v |= lc[inter[j]];
+                        if (Integer.bitCount(v) < size + 2) continue;
+                        for (int a = 1; a < (1 << nl); a++) {
+                            int va = lineUnion[a];
+                            if ((va & v) == 0) continue;
+                            for (int d = 1; d < (1 << nb); d++) {
+                                int vd = boxUnion[d];
+                                if ((va & vd) != 0 || (vd & v) == 0) continue;
+                                if (Integer.bitCount(v | va | vd) != size + Integer.bitCount(a) + Integer.bitCount(d)) continue;
+                                if (sueDrop(line, box, cs, ni, a, nl, d, nb, va | (v & ~vd), vd | (v & ~va))) return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean sueDrop(int line, int box, int cs, int ni, int a, int nl, int d, int nb, int lineDigits, int boxDigits) {
+        int[] keep = elimTry;
+        Arrays.fill(keep, 0);
+        for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) keep[inter[j]] = 1;
+        for (int j = 0; j < nl; j++) if ((a & (1 << j)) != 0) keep[lineRest[j]] = 2;
+        for (int j = 0; j < nb; j++) if ((d & (1 << j)) != 0) keep[boxRest[j]] = 3;
+        boolean changed = false;
+        for (int k = 0; k < 9; k++) {
+            int c = UNITS[line][k];
+            if (keep[c] != 1 && keep[c] != 2 && drop(c, lineDigits)) changed = true;
+        }
+        for (int k = 0; k < 9; k++) {
+            int c = UNITS[18 + box][k];
+            if (keep[c] != 1 && keep[c] != 3 && drop(c, boxDigits)) changed = true;
+        }
+        return changed;
+    }
+
+    private void collectAls() {
+        int n = 0;
+        for (int u = 0; u < 27 && n < MAX_ALS; u++) {
+            int[] cells = UNITS[u];
+            int free = 0;
+            for (int k = 0; k < 9; k++) if (lc[cells[k]] != 0) free |= 1 << k;
+            for (int s = 1; s < 512 && n < MAX_ALS; s++) {
+                if ((s & free) != s) continue;
+                int m = 0;
+                int rows = 0;
+                int cols = 0;
+                for (int k = 0; k < 9; k++) {
+                    if ((s & (1 << k)) == 0) continue;
+                    int c = cells[k];
+                    m |= lc[c];
+                    rows |= 1 << ROW[c];
+                    cols |= 1 << COL[c];
+                }
+                if (Integer.bitCount(m) != Integer.bitCount(s) + 1) continue;
+                if (u >= 9 && Integer.bitCount(rows) == 1) continue;
+                if (u >= 18 && Integer.bitCount(cols) == 1) continue;
+                alsDigits[n] = m;
+                alsCells[n * 3] = 0;
+                alsCells[n * 3 + 1] = 0;
+                alsCells[n * 3 + 2] = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = cells[k];
+                    if ((s & (1 << k)) != 0) alsCells[n * 3 + c / 27] |= 1 << (c % 27);
+                }
+                for (int d = 0; d < 9; d++) {
+                    int at = (n * 9 + d) * 3;
+                    int w0 = 0;
+                    int w1 = 0;
+                    int w2 = 0;
+                    int s0 = -1;
+                    int s1 = -1;
+                    int s2 = -1;
+                    for (int k = 0; k < 9; k++) {
+                        int c = cells[k];
+                        if ((s & (1 << k)) == 0 || (lc[c] & (1 << d)) == 0) continue;
+                        if (c < 27) w0 |= 1 << c;
+                        else if (c < 54) w1 |= 1 << (c - 27);
+                        else w2 |= 1 << (c - 54);
+                        s0 &= PEER_SET[c * 3];
+                        s1 &= PEER_SET[c * 3 + 1];
+                        s2 &= PEER_SET[c * 3 + 2];
+                    }
+                    boolean present = (w0 | w1 | w2) != 0;
+                    alsDigitCells[at] = w0;
+                    alsDigitCells[at + 1] = w1;
+                    alsDigitCells[at + 2] = w2;
+                    alsSeen[at] = present ? s0 : 0;
+                    alsSeen[at + 1] = present ? s1 : 0;
+                    alsSeen[at + 2] = present ? s2 : 0;
+                }
+                n++;
+            }
+        }
+        alsCount = n;
+    }
+
+    private boolean alsOverlap(int i, int j) {
+        return ((alsCells[i * 3] & alsCells[j * 3]) | (alsCells[i * 3 + 1] & alsCells[j * 3 + 1]) | (alsCells[i * 3 + 2] & alsCells[j * 3 + 2])) != 0;
+    }
+
+    private boolean alsHas(int i, int c) {
+        return (alsCells[i * 3 + c / 27] & (1 << (c % 27))) != 0;
+    }
+
+    private int restrictedCommon(int i, int j) {
+        int rcc = 0;
+        for (int rest = alsDigits[i] & alsDigits[j]; rest != 0; rest &= rest - 1) {
+            int d = Integer.numberOfTrailingZeros(rest);
+            int a = (i * 9 + d) * 3;
+            int b = (j * 9 + d) * 3;
+            if (((alsDigitCells[b] & ~alsSeen[a]) | (alsDigitCells[b + 1] & ~alsSeen[a + 1]) | (alsDigitCells[b + 2] & ~alsSeen[a + 2])) != 0) continue;
+            rcc |= 1 << d;
+        }
+        return rcc;
+    }
+
+    private void linkAls() {
+        int n = 0;
+        for (int i = 0; i < alsCount; i++) {
+            alsLinkStart[i] = n;
+            for (int j = 0; j < alsCount; j++) {
+                if (i == j || (alsDigits[i] & alsDigits[j]) == 0 || alsOverlap(i, j)) continue;
+                int rcc = restrictedCommon(i, j);
+                if (rcc == 0 || n >= MAX_ALS_LINKS) continue;
+                alsLinkTo[n] = j;
+                alsLinkMask[n] = rcc;
+                n++;
+            }
+        }
+        alsLinkStart[alsCount] = n;
+    }
+
+    private boolean dropSeen(int i, int j, int d) {
+        boolean changed = false;
+        for (int w = 0; w < 3; w++) {
+            for (int m = alsSeen[(i * 9 + d) * 3 + w] & alsSeen[(j * 9 + d) * 3 + w] & digitCells[d * 3 + w]; m != 0; m &= m - 1) {
+                if (drop(w * 27 + Integer.numberOfTrailingZeros(m), 1 << d)) changed = true;
+            }
+        }
+        return changed;
+    }
+
+    boolean alsXz() {
+        prepareUnits();
+        collectAls();
+        for (int i = 0; i < alsCount; i++) {
+            for (int j = i + 1; j < alsCount; j++) {
+                int common = alsDigits[i] & alsDigits[j];
+                if (Integer.bitCount(common) < 2 || alsOverlap(i, j)) continue;
+                int rcc = restrictedCommon(i, j);
+                if (rcc == 0) continue;
+                boolean changed = false;
+                if (Integer.bitCount(rcc) == 1) {
+                    for (int rest = common & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(i, j, Integer.numberOfTrailingZeros(rest))) changed = true;
+                } else {
+                    for (int rest = rcc; rest != 0; rest &= rest - 1) if (dropSeen(i, j, Integer.numberOfTrailingZeros(rest))) changed = true;
+                    for (int rest = alsDigits[i] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(i, i, Integer.numberOfTrailingZeros(rest))) changed = true;
+                    for (int rest = alsDigits[j] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(j, j, Integer.numberOfTrailingZeros(rest))) changed = true;
+                }
+                if (changed) return true;
+            }
+        }
+        return false;
+    }
+
+    boolean alsXyWing() {
+        prepareUnits();
+        collectAls();
+        linkAls();
+        for (int c = 0; c < alsCount; c++) {
+            for (int p = alsLinkStart[c]; p < alsLinkStart[c + 1]; p++) {
+                int a = alsLinkTo[p];
+                for (int q = p + 1; q < alsLinkStart[c + 1]; q++) {
+                    int b = alsLinkTo[q];
+                    int common = alsDigits[a] & alsDigits[b];
+                    if (common == 0 || alsOverlap(a, b)) continue;
+                    for (int xs = alsLinkMask[p]; xs != 0; xs &= xs - 1) {
+                        int x = xs & -xs;
+                        for (int ys = alsLinkMask[q] & ~x; ys != 0; ys &= ys - 1) {
+                            int y = ys & -ys;
+                            boolean changed = false;
+                            for (int zs = common & ~x & ~y; zs != 0; zs &= zs - 1) if (dropSeen(a, b, Integer.numberOfTrailingZeros(zs))) changed = true;
+                            if (changed) return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    boolean deathBlossom() {
+        prepareUnits();
+        collectAls();
+        for (int stem = 0; stem < 81; stem++) {
+            int sm = lc[stem];
+            if (Integer.bitCount(sm) < 2) continue;
+            int n = 0;
+            int k = 0;
+            for (int rest = sm; rest != 0; rest &= rest - 1) {
+                int d = Integer.numberOfTrailingZeros(rest);
+                petalStart[k++] = n;
+                for (int i = 0; i < alsCount; i++) {
+                    if ((alsDigits[i] & (1 << d)) == 0 || alsHas(i, stem)) continue;
+                    if ((alsSeen[(i * 9 + d) * 3 + stem / 27] & (1 << (stem % 27))) == 0) continue;
+                    petals[n++] = i;
+                }
+            }
+            petalStart[k] = n;
+            for (int z = 0; z < 9; z++) {
+                if ((sm & (1 << z)) != 0) continue;
+                if (blossom(0, k, z, digitCells[z * 3], digitCells[z * 3 + 1], digitCells[z * 3 + 2], 0, 0, 0)) return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean blossom(int k, int count, int z, int s0, int s1, int s2, int u0, int u1, int u2) {
+        if (k == count) {
+            boolean changed = false;
+            for (int m = s0; m != 0; m &= m - 1) if (drop(Integer.numberOfTrailingZeros(m), 1 << z)) changed = true;
+            for (int m = s1; m != 0; m &= m - 1) if (drop(27 + Integer.numberOfTrailingZeros(m), 1 << z)) changed = true;
+            for (int m = s2; m != 0; m &= m - 1) if (drop(54 + Integer.numberOfTrailingZeros(m), 1 << z)) changed = true;
+            return changed;
+        }
+        for (int p = petalStart[k]; p < petalStart[k + 1]; p++) {
+            int i = petals[p];
+            if ((alsDigits[i] & (1 << z)) == 0) continue;
+            int c0 = alsCells[i * 3];
+            int c1 = alsCells[i * 3 + 1];
+            int c2 = alsCells[i * 3 + 2];
+            if (((c0 & u0) | (c1 & u1) | (c2 & u2)) != 0) continue;
+            int at = (i * 9 + z) * 3;
+            int t0 = s0 & alsSeen[at];
+            int t1 = s1 & alsSeen[at + 1];
+            int t2 = s2 & alsSeen[at + 2];
+            if ((t0 | t1 | t2) == 0) continue;
+            if (blossom(k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return true;
+        }
+        return false;
+    }
+
+    boolean alsChain() {
+        prepareUnits();
+        collectAls();
+        linkAls();
+        int none = 0x7fffffff;
+        int best = none;
+        for (int a = 0; a < alsCount; a++) {
+            int found = alsChainFrom(a, best);
+            if (found != 0) best = found;
+        }
+        if (best == none) return false;
+        for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
+        stepRating = TECH_BASE[36] + chainBonus(2 * best - 1);
+        return true;
+    }
+
+    private int alsChainFrom(int a, int limit) {
+        if (++alsMarkValue >= 0x7fffffff) {
+            Arrays.fill(alsMark, 0);
+            alsMarkValue = 1;
+        }
+        int stamp = alsMarkValue;
+        int head = 0;
+        int tail = 0;
+        for (int p = alsLinkStart[a]; p < alsLinkStart[a + 1]; p++) {
+            if (2 >= limit) break;
+            int b = alsLinkTo[p];
+            for (int xs = alsLinkMask[p]; xs != 0; xs &= xs - 1) {
+                int x = Integer.numberOfTrailingZeros(xs);
+                int st = b * 9 + x;
+                if (alsMark[st] != stamp) {
+                    alsMark[st] = stamp;
+                    alsFirst[st] = 0;
+                    alsDepth[st] = 2;
+                    alsQueue[tail++] = st;
+                }
+                alsFirst[st] |= 1 << x;
+            }
+        }
+        while (head < tail) {
+            int st = alsQueue[head++];
+            int b = st / 9;
+            int x = st % 9;
+            int k = alsDepth[st];
+            if (k >= limit) break;
+            if (b != a && alsChainTargets(a, b, x, alsFirst[st])) {
+                System.arraycopy(elimTry, 0, elimBest, 0, 81);
+                return k;
+            }
+            if (k + 1 >= limit) continue;
+            for (int p = alsLinkStart[b]; p < alsLinkStart[b + 1]; p++) {
+                int c = alsLinkTo[p];
+                if (c == a) continue;
+                for (int ys = alsLinkMask[p] & ~(1 << x); ys != 0; ys &= ys - 1) {
+                    int y = Integer.numberOfTrailingZeros(ys);
+                    int next = c * 9 + y;
+                    if (alsMark[next] != stamp) {
+                        alsMark[next] = stamp;
+                        alsFirst[next] = 0;
+                        alsDepth[next] = k + 1;
+                        alsQueue[tail++] = next;
+                    }
+                    if (alsDepth[next] == k + 1) alsFirst[next] |= alsFirst[st];
+                }
+            }
+        }
+        return 0;
+    }
+
+    private boolean alsChainTargets(int a, int b, int x, int firsts) {
+        int common = alsDigits[a] & alsDigits[b] & ~(1 << x);
+        boolean any = false;
+        for (int zs = common; zs != 0; zs &= zs - 1) {
+            int z = Integer.numberOfTrailingZeros(zs);
+            if ((firsts & ~(1 << z)) == 0) continue;
+            for (int w = 0; w < 3; w++) {
+                int m = alsSeen[(a * 9 + z) * 3 + w] & alsSeen[(b * 9 + z) * 3 + w] & digitCells[z * 3 + w];
+                if (m == 0) continue;
+                if (!any) Arrays.fill(elimTry, 0);
+                any = true;
+                for (; m != 0; m &= m - 1) elimTry[w * 27 + Integer.numberOfTrailingZeros(m)] |= 1 << z;
+            }
+        }
+        return any;
+    }
+
     int techLimit = TECH_COUNT;
+    final boolean[] techOff = new boolean[TECH_COUNT];
     int stepRating;
     int stepOrder;
     int rateOrder;
@@ -1127,6 +1831,16 @@ final class Sudoku {
             case 24: return rectangles(6);
             case 25: return rectangles(7);
             case 26: return bugPlusOne();
+            case 27:
+            case 28:
+            case 29:
+            case 30:
+            case 31: return chains(id);
+            case 32: return sueDeCoq();
+            case 33: return alsXz();
+            case 34: return alsXyWing();
+            case 35: return deathBlossom();
+            case 36: return alsChain();
         }
         return false;
     }
@@ -1134,6 +1848,7 @@ final class Sudoku {
     int step() {
         for (int k = 0; k < techLimit; k++) {
             int id = TECH_ORDER[k];
+            if (techOff[id]) continue;
             stepRating = TECH_BASE[id];
             if (apply(id)) {
                 stepOrder = k;

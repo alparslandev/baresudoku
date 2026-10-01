@@ -6,10 +6,11 @@ int SUDOKU_COL[81];
 int SUDOKU_BOX[81];
 int SUDOKU_UNITS[27][9];
 int SUDOKU_PEERS[81][20];
-const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56};
+const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82};
 int SUDOKU_TECH_ORDER[SUDOKU_TECH_COUNT];
 int SUDOKU_EXPERT_LIMIT;
 static unsigned char SEE[6561];
+static int PEER_SET[243];
 static int tablesReady;
 
 static void initTables(void) {
@@ -31,6 +32,12 @@ static void initTables(void) {
         for (int j = 0; j < 81; j++) {
             if (sudoku_sees(i, j)) SUDOKU_PEERS[i][n++] = j;
             SEE[i * 81 + j] = (unsigned char)sudoku_sees(i, j);
+        }
+    }
+    for (int c = 0; c < 81; c++) {
+        for (int k = 0; k < 20; k++) {
+            int p = SUDOKU_PEERS[c][k];
+            PEER_SET[c * 3 + p / 27] |= 1 << (p % 27);
         }
     }
     int n = 0;
@@ -1066,6 +1073,660 @@ static int bugPlusOne(Sudoku *s) {
     return 0;
 }
 
+static int positionIn(int c, int u) {
+    return u < 9 ? SUDOKU_COL[c] : u < 18 ? SUDOKU_ROW[c] : (SUDOKU_ROW[c] % 3) * 3 + SUDOKU_COL[c] % 3;
+}
+
+static int chainBonus(int links) {
+    if (links <= 4) return 0;
+    int bonus = (links - 4) >> 1;
+    return bonus < 10 ? bonus : 10;
+}
+
+static void prepareUnits(Sudoku *s) {
+    for (int u = 0; u < 27; u++) {
+        for (int d = 1; d <= 9; d++) s->unitPos[u * 9 + d - 1] = unitMask(s, SUDOKU_UNITS[u], sudoku_bit(d));
+    }
+    memset(s->digitCells, 0, sizeof(s->digitCells));
+    for (int c = 0; c < 81; c++) {
+        for (int rest = s->lc[c]; rest != 0; rest &= rest - 1) s->digitCells[__builtin_ctz(rest) * 3 + c / 27] |= 1 << (c % 27);
+    }
+}
+
+static void prepareGroups(Sudoku *s) {
+    int n = 0;
+    for (int i = 0; i < 486; i++) s->groupAt[i] = -1;
+    for (int d = 1; d <= 9; d++) {
+        int b = sudoku_bit(d);
+        s->groupFirst[d] = n;
+        for (int box = 0; box < 9; box++) {
+            int top = (box / 3) * 3;
+            int left = (box % 3) * 3;
+            for (int seg = 0; seg < 6; seg++) {
+                int size = 0;
+                for (int k = 0; k < 3; k++) {
+                    int c = seg < 3 ? (top + seg) * 9 + left + k : (top + k) * 9 + left + seg - 3;
+                    if ((s->lc[c] & b) != 0) s->groupCells[n * 3 + size++] = c;
+                }
+                if (size < 2) continue;
+                s->groupDigit[n] = d;
+                s->groupSize[n] = size;
+                s->groupBox[n] = box;
+                s->groupLine[n] = seg < 3 ? top + seg : 9 + left + seg - 3;
+                for (int w = 0; w < 3; w++) {
+                    int seen = -1;
+                    for (int k = 0; k < size; k++) seen &= PEER_SET[s->groupCells[n * 3 + k] * 3 + w];
+                    s->groupSeen[n * 3 + w] = seen;
+                }
+                s->groupAt[(d - 1) * 54 + box * 6 + seg] = n;
+                n++;
+            }
+        }
+    }
+    s->groupFirst[10] = n;
+    s->groupCount = n;
+}
+
+static int restNode(const Sudoku *s, int u, int d, int rest, int grouped) {
+    if (rest == 0) return -1;
+    const int *cells = SUDOKU_UNITS[u];
+    if (__builtin_popcount(rest) == 1) return cells[__builtin_ctz(rest)] * 9 + d - 1;
+    if (!grouped) return -1;
+    int first = cells[__builtin_ctz(rest)];
+    int sameBox = 1;
+    int sameRow = 1;
+    int sameCol = 1;
+    for (int m = rest & (rest - 1); m != 0; m &= m - 1) {
+        int c = cells[__builtin_ctz(m)];
+        if (SUDOKU_BOX[c] != SUDOKU_BOX[first]) sameBox = 0;
+        if (SUDOKU_ROW[c] != SUDOKU_ROW[first]) sameRow = 0;
+        if (SUDOKU_COL[c] != SUDOKU_COL[first]) sameCol = 0;
+    }
+    if (!sameBox || (!sameRow && !sameCol)) return -1;
+    int g = s->groupAt[(d - 1) * 54 + SUDOKU_BOX[first] * 6 + (sameRow ? SUDOKU_ROW[first] % 3 : 3 + SUDOKU_COL[first] % 3)];
+    return g >= 0 && s->groupSize[g] == __builtin_popcount(rest) ? 729 + g : -1;
+}
+
+static int addLink(Sudoku *s, int n, int state) {
+    if (n >= SUDOKU_MAX_LINKS) return n;
+    s->linkTo[n] = state;
+    return n + 1;
+}
+
+static int linked(const Sudoku *s, int from, int to, int state) {
+    for (int k = from; k < to; k++) if (s->linkTo[k] == state) return 1;
+    return 0;
+}
+
+static int seesGroup(const Sudoku *s, int c, int g) {
+    return (s->groupSeen[g * 3 + c / 27] & (1 << (c % 27))) != 0;
+}
+
+static int groupWithin(const Sudoku *s, int h, int g) {
+    for (int i = 0; i < s->groupSize[h]; i++) if (!seesGroup(s, s->groupCells[h * 3 + i], g)) return 0;
+    return 1;
+}
+
+static void buildLinks(Sudoku *s, int id) {
+    int grouped = id == 31;
+    int units = id != 28;
+    int bivalue = id != 27;
+    int mates = id >= 29;
+    int n = 0;
+    for (int node = 0; node < SUDOKU_NODES; node++) {
+        s->linkStart[node * 2] = n;
+        if (node < 729) {
+            int c = node / 9;
+            int d = node % 9 + 1;
+            int b = sudoku_bit(d);
+            int alive = (s->lc[c] & b) != 0;
+            if (alive && units) {
+                int first = n;
+                for (int k = 0; k < 3; k++) {
+                    int u = k == 0 ? SUDOKU_ROW[c] : k == 1 ? 9 + SUDOKU_COL[c] : 18 + SUDOKU_BOX[c];
+                    int target = restNode(s, u, d, s->unitPos[u * 9 + d - 1] & ~(1 << positionIn(c, u)), grouped);
+                    if (target >= 0 && !linked(s, first, n, target * 2 + 1)) n = addLink(s, n, target * 2 + 1);
+                }
+            }
+            if (alive && bivalue && __builtin_popcount(s->lc[c]) == 2) n = addLink(s, n, (c * 9 + __builtin_ctz(s->lc[c] & ~b)) * 2 + 1);
+            s->linkStart[node * 2 + 1] = n;
+            if (!alive) continue;
+            for (int k = 0; k < 20; k++) {
+                int p = SUDOKU_PEERS[c][k];
+                if ((s->lc[p] & b) != 0) n = addLink(s, n, (p * 9 + d - 1) * 2);
+            }
+            if (mates) {
+                for (int rest = s->lc[c] & ~b; rest != 0; rest &= rest - 1) n = addLink(s, n, (c * 9 + __builtin_ctz(rest)) * 2);
+            }
+            if (grouped) {
+                for (int g = s->groupFirst[d]; g < s->groupFirst[d + 1]; g++) if (seesGroup(s, c, g)) n = addLink(s, n, (729 + g) * 2);
+            }
+        } else {
+            int g = node - 729;
+            int alive = g < s->groupCount;
+            int d = alive ? s->groupDigit[g] : 0;
+            if (alive) {
+                int first = n;
+                for (int k = 0; k < 2; k++) {
+                    int u = k == 0 ? s->groupLine[g] : 18 + s->groupBox[g];
+                    int own = 0;
+                    for (int i = 0; i < s->groupSize[g]; i++) own |= 1 << positionIn(s->groupCells[g * 3 + i], u);
+                    int target = restNode(s, u, d, s->unitPos[u * 9 + d - 1] & ~own, 1);
+                    if (target >= 0 && !linked(s, first, n, target * 2 + 1)) n = addLink(s, n, target * 2 + 1);
+                }
+            }
+            s->linkStart[node * 2 + 1] = n;
+            if (!alive) continue;
+            for (int p = 0; p < 81; p++) if ((s->lc[p] & sudoku_bit(d)) != 0 && seesGroup(s, p, g)) n = addLink(s, n, (p * 9 + d - 1) * 2);
+            for (int h = s->groupFirst[d]; h < s->groupFirst[d + 1]; h++) if (h != g && groupWithin(s, h, g)) n = addLink(s, n, (729 + h) * 2);
+        }
+    }
+    s->linkStart[SUDOKU_STATES] = n;
+}
+
+static int nodeDigit(const Sudoku *s, int node) {
+    return node < 729 ? node % 9 + 1 : s->groupDigit[node - 729];
+}
+
+static int seenWord(const Sudoku *s, int node, int w) {
+    return node < 729 ? PEER_SET[(node / 9) * 3 + w] : s->groupSeen[(node - 729) * 3 + w];
+}
+
+static int targets(Sudoku *s, int from, int to, int write) {
+    int ds = nodeDigit(s, from);
+    int dn = nodeDigit(s, to);
+    int any = 0;
+    if (write) memset(s->elimTry, 0, sizeof(s->elimTry));
+    if (ds == dn) {
+        for (int w = 0; w < 3; w++) {
+            int m = seenWord(s, from, w) & seenWord(s, to, w) & s->digitCells[(ds - 1) * 3 + w];
+            if (m == 0) continue;
+            if (!write) return 1;
+            any = 1;
+            for (; m != 0; m &= m - 1) s->elimTry[w * 27 + __builtin_ctz(m)] |= sudoku_bit(ds);
+        }
+    }
+    if (from < 729 && to < 729) {
+        int sc = from / 9;
+        int nc = to / 9;
+        if (sc == nc) {
+            int rest = s->lc[sc] & ~sudoku_bit(ds) & ~sudoku_bit(dn);
+            if (rest != 0) {
+                if (!write) return 1;
+                any = 1;
+                s->elimTry[sc] |= rest;
+            }
+        } else if (ds != dn && SEE[sc * 81 + nc]) {
+            if ((s->lc[sc] & sudoku_bit(dn)) != 0) {
+                if (!write) return 1;
+                any = 1;
+                s->elimTry[sc] |= sudoku_bit(dn);
+            }
+            if ((s->lc[nc] & sudoku_bit(ds)) != 0) {
+                if (!write) return 1;
+                any = 1;
+                s->elimTry[nc] |= sudoku_bit(ds);
+            }
+        }
+    } else if (ds != dn && (from < 729 || to < 729)) {
+        int single = from < 729 ? from : to;
+        int group = from < 729 ? to - 729 : from - 729;
+        int c = single / 9;
+        int dg = s->groupDigit[group];
+        if ((s->lc[c] & sudoku_bit(dg)) != 0 && seesGroup(s, c, group)) {
+            if (!write) return 1;
+            any = 1;
+            s->elimTry[c] |= sudoku_bit(dg);
+        }
+    }
+    return any;
+}
+
+static void weakElims(Sudoku *s, int x, int y) {
+    int xc = x / 9;
+    int yc = y / 9;
+    int xd = x % 9;
+    int yd = y % 9;
+    if (xc == yc) {
+        s->elimTry[xc] |= s->lc[xc] & ~(1 << xd) & ~(1 << yd);
+        return;
+    }
+    for (int w = 0; w < 3; w++) {
+        for (int m = PEER_SET[xc * 3 + w] & PEER_SET[yc * 3 + w] & s->digitCells[xd * 3 + w]; m != 0; m &= m - 1) {
+            s->elimTry[w * 27 + __builtin_ctz(m)] |= 1 << xd;
+        }
+    }
+}
+
+static int loopTargets(Sudoku *s, int from, int end) {
+    int n = end >> 1;
+    if (n == from) return 0;
+    int sc = from / 9;
+    int nc = n / 9;
+    int sd = from % 9;
+    int nd = n % 9;
+    if (sc == nc ? sd == nd : sd != nd || !SEE[sc * 81 + nc]) return 0;
+    memset(s->elimTry, 0, sizeof(s->elimTry));
+    weakElims(s, n, from);
+    for (int st = end; s->parent[st] >= 0; st = s->parent[st]) {
+        int pa = s->parent[st];
+        if ((pa & 1) != 0 && (st & 1) == 0) weakElims(s, pa >> 1, st >> 1);
+    }
+    for (int c = 0; c < 81; c++) if (s->elimTry[c] != 0) return 1;
+    return 0;
+}
+
+static int chainFrom(Sudoku *s, int from, int loop, int limit) {
+    if (++s->markValue >= 0x7fffffff) {
+        memset(s->mark, 0, sizeof(s->mark));
+        s->markValue = 1;
+    }
+    int stamp = s->markValue;
+    int origin = from * 2;
+    s->mark[origin] = stamp;
+    s->depth[origin] = 0;
+    s->parent[origin] = -1;
+    int head = 0;
+    int tail = 0;
+    s->queue[tail++] = origin;
+    while (head < tail) {
+        int st = s->queue[head++];
+        int d = s->depth[st] + 1;
+        if (d >= limit) break;
+        for (int k = s->linkStart[st]; k < s->linkStart[st + 1]; k++) {
+            int ch = s->linkTo[k];
+            if (s->mark[ch] == stamp) continue;
+            s->mark[ch] = stamp;
+            s->depth[ch] = d;
+            s->parent[ch] = st;
+            s->queue[tail++] = ch;
+            if ((ch & 1) == 0) continue;
+            if (loop ? loopTargets(s, from, ch) : targets(s, from, ch >> 1, 0) && targets(s, from, ch >> 1, 1)) {
+                memcpy(s->elimBest, s->elimTry, sizeof(s->elimBest));
+                return d;
+            }
+        }
+    }
+    return 0;
+}
+
+static int chains(Sudoku *s, int id) {
+    prepareUnits(s);
+    if (id == 31) prepareGroups(s);
+    else s->groupCount = 0;
+    buildLinks(s, id);
+    int loop = id == 29 ? 1 : 0;
+    int none = 0x7fffffff;
+    int best = none;
+    int nodes = 729 + s->groupCount;
+    for (int from = 0; from < nodes; from++) {
+        if (s->linkStart[from * 2] == s->linkStart[from * 2 + 1]) continue;
+        int found = chainFrom(s, from, loop == 1, best - loop);
+        if (found != 0) best = found + loop;
+    }
+    if (best == none) return 0;
+    for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
+    s->stepRating = SUDOKU_TECH_BASE[id] + chainBonus(best);
+    return 1;
+}
+
+static int sueDrop(Sudoku *s, int line, int box, int cs, int ni, int a, int nl, int d, int nb, int lineDigits, int boxDigits) {
+    int *keep = s->elimTry;
+    memset(keep, 0, sizeof(s->elimTry));
+    for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) keep[s->inter[j]] = 1;
+    for (int j = 0; j < nl; j++) if ((a & (1 << j)) != 0) keep[s->lineRest[j]] = 2;
+    for (int j = 0; j < nb; j++) if ((d & (1 << j)) != 0) keep[s->boxRest[j]] = 3;
+    int changed = 0;
+    for (int k = 0; k < 9; k++) {
+        int c = SUDOKU_UNITS[line][k];
+        if (keep[c] != 1 && keep[c] != 2 && drop(s, c, lineDigits)) changed = 1;
+    }
+    for (int k = 0; k < 9; k++) {
+        int c = SUDOKU_UNITS[18 + box][k];
+        if (keep[c] != 1 && keep[c] != 3 && drop(s, c, boxDigits)) changed = 1;
+    }
+    return changed;
+}
+
+static int sueDeCoq(Sudoku *s) {
+    for (int box = 0; box < 9; box++) {
+        for (int t = 0; t < 2; t++) {
+            for (int i = 0; i < 3; i++) {
+                int line = t == 0 ? (box / 3) * 3 + i : 9 + (box % 3) * 3 + i;
+                int ni = 0;
+                int nl = 0;
+                int nb = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = SUDOKU_UNITS[line][k];
+                    if (s->lc[c] == 0) continue;
+                    if (SUDOKU_BOX[c] == box) s->inter[ni++] = c;
+                    else s->lineRest[nl++] = c;
+                }
+                if (ni < 2) continue;
+                for (int k = 0; k < 9; k++) {
+                    int c = SUDOKU_UNITS[18 + box][k];
+                    if (s->lc[c] != 0 && (t == 0 ? SUDOKU_ROW[c] != line : SUDOKU_COL[c] != line - 9)) s->boxRest[nb++] = c;
+                }
+                s->lineUnion[0] = 0;
+                for (int a = 1; a < (1 << nl); a++) s->lineUnion[a] = s->lineUnion[a & (a - 1)] | s->lc[s->lineRest[__builtin_ctz(a)]];
+                s->boxUnion[0] = 0;
+                for (int a = 1; a < (1 << nb); a++) s->boxUnion[a] = s->boxUnion[a & (a - 1)] | s->lc[s->boxRest[__builtin_ctz(a)]];
+                for (int cs = 3; cs < (1 << ni); cs++) {
+                    int size = __builtin_popcount(cs);
+                    if (size < 2) continue;
+                    int v = 0;
+                    for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) v |= s->lc[s->inter[j]];
+                    if (__builtin_popcount(v) < size + 2) continue;
+                    for (int a = 1; a < (1 << nl); a++) {
+                        int va = s->lineUnion[a];
+                        if ((va & v) == 0) continue;
+                        for (int d = 1; d < (1 << nb); d++) {
+                            int vd = s->boxUnion[d];
+                            if ((va & vd) != 0 || (vd & v) == 0) continue;
+                            if (__builtin_popcount(v | va | vd) != size + __builtin_popcount(a) + __builtin_popcount(d)) continue;
+                            if (sueDrop(s, line, box, cs, ni, a, nl, d, nb, va | (v & ~vd), vd | (v & ~va))) return 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static void collectAls(Sudoku *s) {
+    int n = 0;
+    for (int u = 0; u < 27 && n < SUDOKU_MAX_ALS; u++) {
+        const int *cells = SUDOKU_UNITS[u];
+        int free = 0;
+        for (int k = 0; k < 9; k++) if (s->lc[cells[k]] != 0) free |= 1 << k;
+        for (int set = 1; set < 512 && n < SUDOKU_MAX_ALS; set++) {
+            if ((set & free) != set) continue;
+            int m = 0;
+            int rows = 0;
+            int cols = 0;
+            for (int k = 0; k < 9; k++) {
+                if ((set & (1 << k)) == 0) continue;
+                int c = cells[k];
+                m |= s->lc[c];
+                rows |= 1 << SUDOKU_ROW[c];
+                cols |= 1 << SUDOKU_COL[c];
+            }
+            if (__builtin_popcount(m) != __builtin_popcount(set) + 1) continue;
+            if (u >= 9 && __builtin_popcount(rows) == 1) continue;
+            if (u >= 18 && __builtin_popcount(cols) == 1) continue;
+            s->alsDigits[n] = m;
+            s->alsCells[n * 3] = 0;
+            s->alsCells[n * 3 + 1] = 0;
+            s->alsCells[n * 3 + 2] = 0;
+            for (int k = 0; k < 9; k++) {
+                int c = cells[k];
+                if ((set & (1 << k)) != 0) s->alsCells[n * 3 + c / 27] |= 1 << (c % 27);
+            }
+            for (int d = 0; d < 9; d++) {
+                int at = (n * 9 + d) * 3;
+                int w0 = 0;
+                int w1 = 0;
+                int w2 = 0;
+                int s0 = -1;
+                int s1 = -1;
+                int s2 = -1;
+                for (int k = 0; k < 9; k++) {
+                    int c = cells[k];
+                    if ((set & (1 << k)) == 0 || (s->lc[c] & (1 << d)) == 0) continue;
+                    if (c < 27) w0 |= 1 << c;
+                    else if (c < 54) w1 |= 1 << (c - 27);
+                    else w2 |= 1 << (c - 54);
+                    s0 &= PEER_SET[c * 3];
+                    s1 &= PEER_SET[c * 3 + 1];
+                    s2 &= PEER_SET[c * 3 + 2];
+                }
+                int present = (w0 | w1 | w2) != 0;
+                s->alsDigitCells[at] = w0;
+                s->alsDigitCells[at + 1] = w1;
+                s->alsDigitCells[at + 2] = w2;
+                s->alsSeen[at] = present ? s0 : 0;
+                s->alsSeen[at + 1] = present ? s1 : 0;
+                s->alsSeen[at + 2] = present ? s2 : 0;
+            }
+            n++;
+        }
+    }
+    s->alsCount = n;
+}
+
+static int alsOverlap(const Sudoku *s, int i, int j) {
+    return ((s->alsCells[i * 3] & s->alsCells[j * 3]) | (s->alsCells[i * 3 + 1] & s->alsCells[j * 3 + 1]) | (s->alsCells[i * 3 + 2] & s->alsCells[j * 3 + 2])) != 0;
+}
+
+static int alsHas(const Sudoku *s, int i, int c) {
+    return (s->alsCells[i * 3 + c / 27] & (1 << (c % 27))) != 0;
+}
+
+static int restrictedCommon(const Sudoku *s, int i, int j) {
+    int rcc = 0;
+    for (int rest = s->alsDigits[i] & s->alsDigits[j]; rest != 0; rest &= rest - 1) {
+        int d = __builtin_ctz(rest);
+        int a = (i * 9 + d) * 3;
+        int b = (j * 9 + d) * 3;
+        if (((s->alsDigitCells[b] & ~s->alsSeen[a]) | (s->alsDigitCells[b + 1] & ~s->alsSeen[a + 1]) | (s->alsDigitCells[b + 2] & ~s->alsSeen[a + 2])) != 0) continue;
+        rcc |= 1 << d;
+    }
+    return rcc;
+}
+
+static void linkAls(Sudoku *s) {
+    int n = 0;
+    for (int i = 0; i < s->alsCount; i++) {
+        s->alsLinkStart[i] = n;
+        for (int j = 0; j < s->alsCount; j++) {
+            if (i == j || (s->alsDigits[i] & s->alsDigits[j]) == 0 || alsOverlap(s, i, j)) continue;
+            int rcc = restrictedCommon(s, i, j);
+            if (rcc == 0 || n >= SUDOKU_MAX_ALS_LINKS) continue;
+            s->alsLinkTo[n] = j;
+            s->alsLinkMask[n] = rcc;
+            n++;
+        }
+    }
+    s->alsLinkStart[s->alsCount] = n;
+}
+
+static int dropSeen(Sudoku *s, int i, int j, int d) {
+    int changed = 0;
+    for (int w = 0; w < 3; w++) {
+        for (int m = s->alsSeen[(i * 9 + d) * 3 + w] & s->alsSeen[(j * 9 + d) * 3 + w] & s->digitCells[d * 3 + w]; m != 0; m &= m - 1) {
+            if (drop(s, w * 27 + __builtin_ctz(m), 1 << d)) changed = 1;
+        }
+    }
+    return changed;
+}
+
+static int alsXz(Sudoku *s) {
+    prepareUnits(s);
+    collectAls(s);
+    for (int i = 0; i < s->alsCount; i++) {
+        for (int j = i + 1; j < s->alsCount; j++) {
+            int common = s->alsDigits[i] & s->alsDigits[j];
+            if (__builtin_popcount(common) < 2 || alsOverlap(s, i, j)) continue;
+            int rcc = restrictedCommon(s, i, j);
+            if (rcc == 0) continue;
+            int changed = 0;
+            if (__builtin_popcount(rcc) == 1) {
+                for (int rest = common & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, i, j, __builtin_ctz(rest))) changed = 1;
+            } else {
+                for (int rest = rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, i, j, __builtin_ctz(rest))) changed = 1;
+                for (int rest = s->alsDigits[i] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, i, i, __builtin_ctz(rest))) changed = 1;
+                for (int rest = s->alsDigits[j] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, j, j, __builtin_ctz(rest))) changed = 1;
+            }
+            if (changed) return 1;
+        }
+    }
+    return 0;
+}
+
+static int alsXyWing(Sudoku *s) {
+    prepareUnits(s);
+    collectAls(s);
+    linkAls(s);
+    for (int c = 0; c < s->alsCount; c++) {
+        for (int p = s->alsLinkStart[c]; p < s->alsLinkStart[c + 1]; p++) {
+            int a = s->alsLinkTo[p];
+            for (int q = p + 1; q < s->alsLinkStart[c + 1]; q++) {
+                int b = s->alsLinkTo[q];
+                int common = s->alsDigits[a] & s->alsDigits[b];
+                if (common == 0 || alsOverlap(s, a, b)) continue;
+                for (int xs = s->alsLinkMask[p]; xs != 0; xs &= xs - 1) {
+                    int x = xs & -xs;
+                    for (int ys = s->alsLinkMask[q] & ~x; ys != 0; ys &= ys - 1) {
+                        int y = ys & -ys;
+                        int changed = 0;
+                        for (int zs = common & ~x & ~y; zs != 0; zs &= zs - 1) if (dropSeen(s, a, b, __builtin_ctz(zs))) changed = 1;
+                        if (changed) return 1;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int blossom(Sudoku *s, int k, int count, int z, int s0, int s1, int s2, int u0, int u1, int u2) {
+    if (k == count) {
+        int changed = 0;
+        for (int m = s0; m != 0; m &= m - 1) if (drop(s, __builtin_ctz(m), 1 << z)) changed = 1;
+        for (int m = s1; m != 0; m &= m - 1) if (drop(s, 27 + __builtin_ctz(m), 1 << z)) changed = 1;
+        for (int m = s2; m != 0; m &= m - 1) if (drop(s, 54 + __builtin_ctz(m), 1 << z)) changed = 1;
+        return changed;
+    }
+    for (int p = s->petalStart[k]; p < s->petalStart[k + 1]; p++) {
+        int i = s->petals[p];
+        if ((s->alsDigits[i] & (1 << z)) == 0) continue;
+        int c0 = s->alsCells[i * 3];
+        int c1 = s->alsCells[i * 3 + 1];
+        int c2 = s->alsCells[i * 3 + 2];
+        if (((c0 & u0) | (c1 & u1) | (c2 & u2)) != 0) continue;
+        int at = (i * 9 + z) * 3;
+        int t0 = s0 & s->alsSeen[at];
+        int t1 = s1 & s->alsSeen[at + 1];
+        int t2 = s2 & s->alsSeen[at + 2];
+        if ((t0 | t1 | t2) == 0) continue;
+        if (blossom(s, k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return 1;
+    }
+    return 0;
+}
+
+static int deathBlossom(Sudoku *s) {
+    prepareUnits(s);
+    collectAls(s);
+    for (int stem = 0; stem < 81; stem++) {
+        int sm = s->lc[stem];
+        if (__builtin_popcount(sm) < 2) continue;
+        int n = 0;
+        int k = 0;
+        for (int rest = sm; rest != 0; rest &= rest - 1) {
+            int d = __builtin_ctz(rest);
+            s->petalStart[k++] = n;
+            for (int i = 0; i < s->alsCount; i++) {
+                if ((s->alsDigits[i] & (1 << d)) == 0 || alsHas(s, i, stem)) continue;
+                if ((s->alsSeen[(i * 9 + d) * 3 + stem / 27] & (1 << (stem % 27))) == 0) continue;
+                s->petals[n++] = i;
+            }
+        }
+        s->petalStart[k] = n;
+        for (int z = 0; z < 9; z++) {
+            if ((sm & (1 << z)) != 0) continue;
+            if (blossom(s, 0, k, z, s->digitCells[z * 3], s->digitCells[z * 3 + 1], s->digitCells[z * 3 + 2], 0, 0, 0)) return 1;
+        }
+    }
+    return 0;
+}
+
+static int alsChainTargets(Sudoku *s, int a, int b, int x, int firsts) {
+    int common = s->alsDigits[a] & s->alsDigits[b] & ~(1 << x);
+    int any = 0;
+    for (int zs = common; zs != 0; zs &= zs - 1) {
+        int z = __builtin_ctz(zs);
+        if ((firsts & ~(1 << z)) == 0) continue;
+        for (int w = 0; w < 3; w++) {
+            int m = s->alsSeen[(a * 9 + z) * 3 + w] & s->alsSeen[(b * 9 + z) * 3 + w] & s->digitCells[z * 3 + w];
+            if (m == 0) continue;
+            if (!any) memset(s->elimTry, 0, sizeof(s->elimTry));
+            any = 1;
+            for (; m != 0; m &= m - 1) s->elimTry[w * 27 + __builtin_ctz(m)] |= 1 << z;
+        }
+    }
+    return any;
+}
+
+static int alsChainFrom(Sudoku *s, int a, int limit) {
+    if (++s->alsMarkValue >= 0x7fffffff) {
+        memset(s->alsMark, 0, sizeof(s->alsMark));
+        s->alsMarkValue = 1;
+    }
+    int stamp = s->alsMarkValue;
+    int head = 0;
+    int tail = 0;
+    for (int p = s->alsLinkStart[a]; p < s->alsLinkStart[a + 1]; p++) {
+        if (2 >= limit) break;
+        int b = s->alsLinkTo[p];
+        for (int xs = s->alsLinkMask[p]; xs != 0; xs &= xs - 1) {
+            int x = __builtin_ctz(xs);
+            int st = b * 9 + x;
+            if (s->alsMark[st] != stamp) {
+                s->alsMark[st] = stamp;
+                s->alsFirst[st] = 0;
+                s->alsDepth[st] = 2;
+                s->alsQueue[tail++] = st;
+            }
+            s->alsFirst[st] |= 1 << x;
+        }
+    }
+    while (head < tail) {
+        int st = s->alsQueue[head++];
+        int b = st / 9;
+        int x = st % 9;
+        int k = s->alsDepth[st];
+        if (k >= limit) break;
+        if (b != a && alsChainTargets(s, a, b, x, s->alsFirst[st])) {
+            memcpy(s->elimBest, s->elimTry, sizeof(s->elimBest));
+            return k;
+        }
+        if (k + 1 >= limit) continue;
+        for (int p = s->alsLinkStart[b]; p < s->alsLinkStart[b + 1]; p++) {
+            int c = s->alsLinkTo[p];
+            if (c == a) continue;
+            for (int ys = s->alsLinkMask[p] & ~(1 << x); ys != 0; ys &= ys - 1) {
+                int y = __builtin_ctz(ys);
+                int next = c * 9 + y;
+                if (s->alsMark[next] != stamp) {
+                    s->alsMark[next] = stamp;
+                    s->alsFirst[next] = 0;
+                    s->alsDepth[next] = k + 1;
+                    s->alsQueue[tail++] = next;
+                }
+                if (s->alsDepth[next] == k + 1) s->alsFirst[next] |= s->alsFirst[st];
+            }
+        }
+    }
+    return 0;
+}
+
+static int alsChain(Sudoku *s) {
+    prepareUnits(s);
+    collectAls(s);
+    linkAls(s);
+    int none = 0x7fffffff;
+    int best = none;
+    for (int a = 0; a < s->alsCount; a++) {
+        int found = alsChainFrom(s, a, best);
+        if (found != 0) best = found;
+    }
+    if (best == none) return 0;
+    for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
+    s->stepRating = SUDOKU_TECH_BASE[36] + chainBonus(2 * best - 1);
+    return 1;
+}
+
 static int apply(Sudoku *s, int id) {
     switch (id) {
         case 0: return singles(s);
@@ -1095,6 +1756,16 @@ static int apply(Sudoku *s, int id) {
         case 24: return rectangles(s, 6);
         case 25: return rectangles(s, 7);
         case 26: return bugPlusOne(s);
+        case 27:
+        case 28:
+        case 29:
+        case 30:
+        case 31: return chains(s, id);
+        case 32: return sueDeCoq(s);
+        case 33: return alsXz(s);
+        case 34: return alsXyWing(s);
+        case 35: return deathBlossom(s);
+        case 36: return alsChain(s);
     }
     return 0;
 }
@@ -1102,6 +1773,7 @@ static int apply(Sudoku *s, int id) {
 int sudoku_step(Sudoku *s) {
     for (int k = 0; k < s->techLimit; k++) {
         int id = SUDOKU_TECH_ORDER[k];
+        if (s->techOff[id]) continue;
         s->stepRating = SUDOKU_TECH_BASE[id];
         if (apply(s, id)) {
             s->stepOrder = k;
