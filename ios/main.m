@@ -12,13 +12,19 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Only one candidate here: #", @"Only place for # in this row", @"Only place for # in this column",
     @"Only place for # in this box", @"Tap hint again to place it", @"Locked candidates", @"Pair or triple",
     @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Restart", @"Row", @"Column", @"# left",
-    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle"};
+    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle",
+    @"Naked Quad", @"Hidden Quad", @"Jellyfish", @"Finned X-Wing", @"Finned Swordfish", @"Finned Jellyfish",
+    @"Empty Rectangle", @"Remote Pair", @"WXYZ-Wing", @"Unique Rectangle Type 2", @"Unique Rectangle Type 3",
+    @"Unique Rectangle Type 4", @"Unique Rectangle Type 5", @"Unique Rectangle Type 6", @"Hidden Rectangle", @"BUG+1"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
     @"Bu kutuda # için tek yer", @"Yerleştirmek için ipucuna tekrar bas", @"Kilitli adaylar", @"Çift veya üçlü",
     @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Baştan başla", @"Satır", @"Sütun", @"# kaldı",
-    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle"};
+    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle",
+    @"Naked Quad", @"Hidden Quad", @"Jellyfish", @"Finned X-Wing", @"Finned Swordfish", @"Finned Jellyfish",
+    @"Empty Rectangle", @"Remote Pair", @"WXYZ-Wing", @"Unique Rectangle Type 2", @"Unique Rectangle Type 3",
+    @"Unique Rectangle Type 4", @"Unique Rectangle Type 5", @"Unique Rectangle Type 6", @"Hidden Rectangle", @"BUG+1"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;

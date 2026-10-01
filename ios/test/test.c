@@ -6,7 +6,7 @@
 #include "../Game.h"
 
 static int failures;
-static const char *LEVELS[] = {"Kolay", "Orta", "Zor", "Uzman"};
+static const char *LEVEL_NAMES[] = {"Kolay", "Orta", "Zor", "Uzman", "Usta"};
 
 static void check(int ok, const char *what) {
     if (ok) return;
@@ -39,7 +39,8 @@ static int verifiedRate(Sudoku *e, const int *puzzle, const int *solution) {
         int t = sudoku_step(e);
         check(t >= 0, "mantikla cozulemedi");
         if (t < 0) return -1;
-        if (t > max) max = t;
+        check(e->stepRating >= SUDOKU_TECH_BASE[t], "adim derecesi taban altinda");
+        if (e->stepRating > max) max = e->stepRating;
         for (int i = 0; i < 81; i++) {
             if (e->lv[i] != 0) check(e->lv[i] == solution[i], "yanlis yerlestirme");
             else check((e->lc[i] & sudoku_bit(solution[i])) != 0, "dogru rakam elendi");
@@ -59,6 +60,7 @@ static void hintWalk(Sudoku *e, const int *puzzle, const int *solution) {
             return;
         }
         check(solution[e->stepCell] == e->stepDigit, "ipucu rakami yanlis");
+        check(e->hintTech >= 0 && e->hintTech < SUDOKU_TECH_COUNT, "ipucu teknigi aralik disi");
         values[e->stepCell] = e->stepDigit;
         if (++steps > 81) {
             check(0, "ipucu yuruyusu bitmedi");
@@ -196,14 +198,32 @@ static void stickyTests(Sudoku *e) {
     printf("Rakam once testleri gecti\n");
 }
 
+static void registryTests(void) {
+    int seen[SUDOKU_TECH_COUNT] = {0};
+    for (int k = 0; k < SUDOKU_TECH_COUNT; k++) {
+        int id = SUDOKU_TECH_ORDER[k];
+        check(!seen[id], "teknik sirasinda tekrar");
+        seen[id] = 1;
+        if (k < 11) check(id == k, "ilk on bir teknik yerinde degil");
+        if (k > 11) {
+            int prev = SUDOKU_TECH_ORDER[k - 1];
+            check(SUDOKU_TECH_BASE[prev] < SUDOKU_TECH_BASE[id] || (SUDOKU_TECH_BASE[prev] == SUDOKU_TECH_BASE[id] && prev < id), "teknik sirasi dereceye gore degil");
+        }
+        check((SUDOKU_TECH_BASE[id] < SUDOKU_MASTER_RATING) == (k < SUDOKU_EXPERT_LIMIT), "uzman siniri yanlis");
+    }
+    check((int)(sizeof(LEVEL_NAMES) / sizeof(LEVEL_NAMES[0])) >= SUDOKU_LEVELS, "seviye adi eksik");
+}
+
+static Sudoku engine;
+
 int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 100;
-    Sudoku engine;
     sudoku_init(&engine, 20260929);
-    for (int level = 0; level < 4; level++) {
+    registryTests();
+    for (int level = 0; level < SUDOKU_LEVELS; level++) {
         double start = nowMs();
         int clues = 0;
-        int techniques[11] = {0};
+        int techniques[SUDOKU_TECH_COUNT] = {0};
         for (int i = 0; i < n; i++) {
             int puzzle[81];
             sudoku_generate(&engine, level, puzzle);
@@ -212,15 +232,18 @@ int main(int argc, char **argv) {
             check(sudoku_count_solutions(&engine, puzzle, 2) == 1, "tek cozum yok");
             check(memcmp(engine.found, solution, sizeof(solution)) == 0, "cozum tam izgarayla eslesmiyor");
             int r = verifiedRate(&engine, puzzle, solution);
-            int levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 10;
+            check(sudoku_rate(&engine, puzzle) == r, "derece tekrarinda farkli");
+            int order = engine.rateOrder;
+            int levelOk = level < 2 ? r == SUDOKU_TECH_BASE[0] : level == 2 ? order >= 1 && order <= 2
+                : level == 3 ? order >= 3 && r < SUDOKU_MASTER_RATING : r >= SUDOKU_MASTER_RATING;
             check(levelOk, "seviye derecesi yanlis");
-            if (r >= 0 && r < 11) techniques[r]++;
+            techniques[engine.rateTech]++;
             clues += count(puzzle);
             hintWalk(&engine, puzzle, solution);
         }
         double ms = nowMs() - start;
-        printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi [", LEVELS[level], n, clues / (double)n, ms / n);
-        for (int k = 0; k < 11; k++) printf(k ? ", %d" : "%d", techniques[k]);
+        printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi [", LEVEL_NAMES[level], n, clues / (double)n, ms / n);
+        for (int k = 0; k < SUDOKU_TECH_COUNT; k++) printf(k ? ", %d" : "%d", techniques[k]);
         printf("]\n");
     }
     gameTests(&engine);

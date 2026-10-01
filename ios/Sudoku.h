@@ -19,10 +19,29 @@ typedef struct Sudoku {
     int stepUnit;
     int positions[10];
     int lineMasks[9];
-    int allowed;
+    int corners[4];
+    int dist81[81];
+    int queue81[81];
+    int cellList[81];
+    int quad[4];
+    int others[9];
+    int techLimit;
+    int stepRating;
+    int stepOrder;
+    int rateOrder;
+    int rateTech;
     int hintTech;
+    int hintRating;
     int solution[81];
 } Sudoku;
+
+#define SUDOKU_TECH_COUNT 27
+#define SUDOKU_MASTER_RATING 65
+#define SUDOKU_LEVELS 4
+
+extern const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT];
+extern int SUDOKU_TECH_ORDER[SUDOKU_TECH_COUNT];
+extern int SUDOKU_EXPERT_LIMIT;
 
 extern int SUDOKU_ROW[81];
 extern int SUDOKU_COL[81];
