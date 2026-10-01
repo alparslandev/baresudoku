@@ -2071,6 +2071,7 @@ final class Sudoku {
     int rateTech;
     int hintTech;
     int hintRating;
+    int rating;
     int[] solution;
 
     boolean apply(int id) {
@@ -2192,6 +2193,7 @@ final class Sudoku {
             boolean ok = r >= 0 && (level < 2 || (level == 2 ? rateOrder >= 1 : level == 3 ? rateOrder >= 3 : r >= MASTER_RATING));
             if (ok) {
                 solution = full;
+                rating = r;
                 return puzzle;
             }
         }

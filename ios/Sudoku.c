@@ -2113,6 +2113,7 @@ void sudoku_generate(Sudoku *s, int level, int *puzzle) {
         int ok = r >= 0 && (level < 2 || (level == 2 ? s->rateOrder >= 1 : level == 3 ? s->rateOrder >= 3 : r >= SUDOKU_MASTER_RATING));
         if (ok) {
             memcpy(s->solution, full, sizeof(s->solution));
+            s->rating = r;
             return;
         }
     }

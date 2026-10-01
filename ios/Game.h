@@ -27,6 +27,7 @@ typedef struct Game {
     int noteMode;
     int showErrors;
     int level;
+    int rating;
     int selected;
     int sticky;
     int64_t elapsed;
