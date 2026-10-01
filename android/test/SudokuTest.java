@@ -4,30 +4,34 @@ import java.util.Arrays;
 
 final class SudokuTest {
     static int failures;
-    static final String[] LEVELS = {"Kolay", "Orta", "Zor", "Uzman"};
+    static final String[] LEVEL_NAMES = {"Kolay", "Orta", "Zor", "Uzman", "Usta"};
 
     public static void main(String[] args) {
         int n = args.length > 0 ? Integer.parseInt(args[0]) : 100;
         Sudoku engine = new Sudoku(20260929);
-        for (int level = 0; level < 4; level++) {
+        registryTests();
+        for (int level = 0; level < Sudoku.LEVELS; level++) {
             long start = System.nanoTime();
             int clues = 0;
-            int[] techniques = new int[11];
+            int[] techniques = new int[Sudoku.TECH_COUNT];
             for (int i = 0; i < n; i++) {
                 int[] puzzle = engine.generate(level);
                 int[] solution = engine.solution;
                 check(engine.countSolutions(puzzle, 2) == 1, "tek cozum yok");
                 check(Arrays.equals(engine.found, solution), "cozum tam izgarayla eslesmiyor");
                 int r = verifiedRate(engine, puzzle, solution);
-                boolean levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 10;
-                check(levelOk, LEVELS[level] + " icin derece " + r);
-                techniques[r]++;
+                check(engine.rate(puzzle) == r, "derece tekrarinda farkli");
+                int order = engine.rateOrder;
+                boolean levelOk = level < 2 ? r == Sudoku.TECH_BASE[0] : level == 2 ? order >= 1 && order <= 2
+                    : level == 3 ? order >= 3 && r < Sudoku.MASTER_RATING : r >= Sudoku.MASTER_RATING;
+                check(levelOk, LEVEL_NAMES[level] + " icin derece " + r + " sira " + order);
+                techniques[engine.rateTech]++;
                 clues += count(puzzle);
                 hintWalk(engine, puzzle, solution);
             }
             long ms = (System.nanoTime() - start) / 1000000;
             System.out.printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi %s%n",
-                LEVELS[level], n, clues / (double) n, ms / (double) n, Arrays.toString(techniques));
+                LEVEL_NAMES[level], n, clues / (double) n, ms / (double) n, Arrays.toString(techniques));
         }
         gameTests(engine);
         stickyTests(engine);
@@ -43,7 +47,8 @@ final class SudokuTest {
             int t = e.step();
             check(t >= 0, "mantikla cozulemedi");
             if (t < 0) return -1;
-            if (t > max) max = t;
+            check(e.stepRating >= Sudoku.TECH_BASE[t], "adim derecesi taban altinda");
+            if (e.stepRating > max) max = e.stepRating;
             for (int i = 0; i < 81; i++) {
                 if (e.valueAt(i) != 0) check(e.valueAt(i) == solution[i], "yanlis yerlestirme, teknik " + t);
                 else check((e.candidatesAt(i) & Sudoku.bit(solution[i])) != 0, "dogru rakam elendi, teknik " + t);
@@ -62,13 +67,29 @@ final class SudokuTest {
                 return;
             }
             check(solution[e.stepCell] == e.stepDigit, "ipucu rakami yanlis");
-            check(e.hintTech >= 0 && e.hintTech <= 10, "ipucu teknigi aralik disi");
+            check(e.hintTech >= 0 && e.hintTech < Sudoku.TECH_COUNT, "ipucu teknigi aralik disi");
             values[e.stepCell] = e.stepDigit;
             if (++steps > 81) {
                 check(false, "ipucu yuruyusu bitmedi");
                 return;
             }
         }
+    }
+
+    static void registryTests() {
+        boolean[] seen = new boolean[Sudoku.TECH_COUNT];
+        for (int k = 0; k < Sudoku.TECH_COUNT; k++) {
+            int id = Sudoku.TECH_ORDER[k];
+            check(!seen[id], "teknik sirasinda tekrar");
+            seen[id] = true;
+            if (k < 11) check(id == k, "ilk on bir teknik yerinde degil");
+            if (k > 11) {
+                int prev = Sudoku.TECH_ORDER[k - 1];
+                check(Sudoku.TECH_BASE[prev] < Sudoku.TECH_BASE[id] || (Sudoku.TECH_BASE[prev] == Sudoku.TECH_BASE[id] && prev < id), "teknik sirasi dereceye gore degil");
+            }
+            check((Sudoku.TECH_BASE[id] < Sudoku.MASTER_RATING) == (k < Sudoku.EXPERT_LIMIT), "uzman siniri yanlis");
+        }
+        check(LEVEL_NAMES.length >= Sudoku.LEVELS, "seviye adi eksik");
     }
 
     static int count(int[] values) {
