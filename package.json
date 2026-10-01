@@ -5,6 +5,7 @@
     "deploy": "sh scripts/deploy.sh",
     "ipa": "sh scripts/ipa.sh",
     "aab": "sh android/bundle.sh",
-    "fastlane": "bun scripts/fastlane.js"
+    "fastlane": "bun scripts/fastlane.js",
+    "parity": "sh scripts/parity.sh"
   }
 }
