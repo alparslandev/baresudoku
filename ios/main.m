@@ -540,7 +540,7 @@ static BoardView *current;
     CGFloat size = topH * 0.42;
     CGFloat cy = topY + topH / 2;
     if (level >= 0) {
-        NSString *s = [self levelName:level];
+        NSString *s = generating ? [self levelName:level] : [self levelText];
         drawText(s, topX + topH * 0.2 + textWidth(s, size, 1) / 2, cy, size, cKeyText, 1);
     }
     if (game.active && !generating) drawText([self clockString:game_time(&game, nowMs())], topX + topW / 2, cy, size, cMuted, 2);
@@ -583,7 +583,7 @@ static BoardView *current;
     drawText(text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5, cKeyText, 1);
     y += menuRowH * 0.6;
     if (solved) {
-        drawText([NSString stringWithFormat:@"%@  %@", [self levelName:game.level], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
+        drawText([NSString stringWithFormat:@"%@  %@", [self levelText], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
         y += menuRowH * 0.6;
     }
     drawText(text[S_NEW], cx, y, menuRowH * 0.34, cMuted, 0);
@@ -644,6 +644,7 @@ static BoardView *current;
         sudoku_generate(worker, level, puzzle);
         dispatch_async(dispatch_get_main_queue(), ^{
             game_start(&game, puzzle, worker->solution, level);
+            game.rating = worker->rating;
             free(puzzle);
             free(worker);
             saveGame();
@@ -833,6 +834,11 @@ static BoardView *current;
     return text[level < 4 ? level : S_MASTER];
 }
 
+- (NSString *)levelText {
+    NSString *name = [self levelName:game.level];
+    return game.rating > 0 ? [NSString stringWithFormat:@"%@ %@", name, [NSString localizedStringWithFormat:@"%.1f", game.rating / 10.0]] : name;
+}
+
 - (NSString *)menuLabel:(int)row {
     if (row < 5) return [self levelName:row];
     if (row == 5) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
@@ -879,7 +885,7 @@ static BoardView *current;
     if ([self overlay]) {
         [self layoutMenu];
         BOOL solved = game.active && game.solved;
-        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], [self levelName:game.level], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
+        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], [self levelText], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
         [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[NSString stringWithFormat:@"%@. %@", title, text[S_NEW]] value:nil traits:UIAccessibilityTraitHeader]];
         for (int row = 0; row < menuRows; row++) {
             [list addObject:[self axElement:400 + row frame:CGRectMake(menuX, [self menuRowY:row], menuW, menuRowH) label:[self menuLabel:row] value:nil traits:UIAccessibilityTraitButton]];
@@ -887,7 +893,7 @@ static BoardView *current;
         return list;
     }
     BOOL playable = game.active && !game.solved;
-    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", [self levelName:game.level], [self clockString:game_time(&game, nowMs())]] : @"";
+    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", [self levelText], [self clockString:game_time(&game, nowMs())]] : @"";
     [list addObject:[self axElement:301 frame:CGRectMake(topX, topY, topW - topH * 0.9, topH) label:top value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
     [list addObject:[self axElement:300 frame:[self targetRect:300] label:text[S_NEW] value:nil traits:UIAccessibilityTraitButton]];
     if (game.active && game_hint_active(&game)) {
@@ -1065,6 +1071,7 @@ static BoardView *current;
     sudoku_init(&engine, ((uint64_t)arc4random() << 32) ^ arc4random());
     game_init(&game);
     game_decode(&game, [[NSUserDefaults standardUserDefaults] stringForKey:@"g"].UTF8String);
+    if (game.active) game.rating = sudoku_rate(&engine, game.given);
     return YES;
 }
 @end

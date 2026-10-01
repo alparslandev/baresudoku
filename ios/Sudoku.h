@@ -87,6 +87,7 @@ typedef struct Sudoku {
     int rateTech;
     int hintTech;
     int hintRating;
+    int rating;
     int solution[81];
 } Sudoku;
 

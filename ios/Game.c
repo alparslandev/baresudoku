@@ -41,6 +41,7 @@ void game_start(Game *g, const int *puzzle, const int *full, int level) {
     memcpy(g->given, puzzle, sizeof(g->given));
     memcpy(g->solution, full, sizeof(g->solution));
     g->level = level;
+    g->rating = 0;
     g->active = 1;
     game_restart(g);
 }
@@ -361,6 +362,7 @@ int game_decode(Game *g, const char *text) {
     }
     g->recordLength = 0;
     g->level = lvl;
+    g->rating = 0;
     g->solved = strcmp(f[2], "1") == 0;
     g->noteMode = strcmp(f[4], "1") == 0;
     g->selected = sel;

@@ -17,6 +17,7 @@ final class Game {
     boolean noteMode;
     boolean showErrors = true;
     int level;
+    int rating;
     int selected = NONE;
     int sticky;
     long elapsed;
@@ -26,6 +27,7 @@ final class Game {
         System.arraycopy(puzzle, 0, given, 0, 81);
         System.arraycopy(full, 0, solution, 0, 81);
         level = newLevel;
+        rating = 0;
         active = true;
         restart();
     }
@@ -312,6 +314,7 @@ final class Game {
             }
             recordLength = 0;
             level = lvl;
+            rating = 0;
             solved = f[2].equals("1");
             noteMode = f[4].equals("1");
             selected = sel;

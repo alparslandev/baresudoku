@@ -559,7 +559,7 @@ final class BoardView extends View implements Runnable {
         float size = topH * 0.42f;
         float cy = topY + topH / 2;
         if (level >= 0) {
-            String s = levelName(level);
+            String s = generating ? levelName(level) : levelText();
             drawText(c, s, topX + topH * 0.2f + width(s, size, Typeface.DEFAULT_BOLD) / 2, cy, size, cKeyText, Typeface.DEFAULT_BOLD);
         }
         if (game.active && !generating) {
@@ -602,7 +602,7 @@ final class BoardView extends View implements Runnable {
         drawText(c, text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5f, cKeyText, Typeface.DEFAULT_BOLD);
         y += menuRowH * 0.6f;
         if (solved) {
-            drawText(c, levelName(game.level) + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
+            drawText(c, levelText() + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
             y += menuRowH * 0.6f;
         }
         drawText(c, text[S_NEW], cx, y, menuRowH * 0.34f, cMuted, Typeface.DEFAULT);
@@ -672,6 +672,11 @@ final class BoardView extends View implements Runnable {
 
     private String levelName(int level) {
         return text[level < 4 ? level : S_MASTER];
+    }
+
+    private String levelText() {
+        String name = levelName(game.level);
+        return game.rating > 0 ? name + " " + String.format(Locale.getDefault(), "%.1f", game.rating / 10.0) : name;
     }
 
     private String menuLabel(int row) {
@@ -745,11 +750,11 @@ final class BoardView extends View implements Runnable {
         if (id == 420) return text[S_PREPARING];
         if (id == 410) {
             boolean solved = game.active && game.solved;
-            String title = solved ? text[S_SOLVED] + " " + levelName(game.level) + " " + clock(game.time(0)) : text[S_TITLE];
+            String title = solved ? text[S_SOLVED] + " " + levelText() + " " + clock(game.time(0)) : text[S_TITLE];
             return title + ". " + text[S_NEW];
         }
         if (id >= 400) return menuLabel(id - 400);
-        if (id == 301) return game.active ? levelName(game.level) + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
+        if (id == 301) return game.active ? levelText() + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
         if (id == 300) return text[S_NEW];
         if (id == 302) {
             String message = hintMessage();
