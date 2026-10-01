@@ -6,7 +6,7 @@ int SUDOKU_COL[81];
 int SUDOKU_BOX[81];
 int SUDOKU_UNITS[27][9];
 int SUDOKU_PEERS[81][20];
-const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82};
+const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95};
 int SUDOKU_TECH_ORDER[SUDOKU_TECH_COUNT];
 int SUDOKU_EXPERT_LIMIT;
 static unsigned char SEE[6561];
@@ -1727,6 +1727,272 @@ static int alsChain(Sudoku *s) {
     return 1;
 }
 
+static int reachConsistent(Sudoku *s, int node) {
+    if (++s->markValue >= 0x7fffffff) {
+        memset(s->mark, 0, sizeof(s->mark));
+        s->markValue = 1;
+    }
+    int stamp = s->markValue;
+    int origin = node * 2 + 1;
+    s->mark[origin] = stamp;
+    int head = 0;
+    int tail = 0;
+    s->queue[tail++] = origin;
+    while (head < tail) {
+        int st = s->queue[head++];
+        for (int k = s->linkStart[st]; k < s->linkStart[st + 1]; k++) {
+            int ch = s->linkTo[k];
+            if (s->mark[ch] == stamp) continue;
+            if (s->mark[ch ^ 1] == stamp) return 0;
+            s->mark[ch] = stamp;
+            s->queue[tail++] = ch;
+        }
+    }
+    memset(s->offMask, 0, sizeof(s->offMask));
+    memset(s->onMask, 0, sizeof(s->onMask));
+    for (int k = 0; k < tail; k++) {
+        int st = s->queue[k];
+        int n = st >> 1;
+        int c = n / 9;
+        int b = 1 << (n % 9);
+        if ((st & 1) != 0) s->onMask[c] |= b;
+        else s->offMask[c] |= b;
+    }
+    for (int c = 0; c < 81; c++) if (s->lc[c] != 0 && (s->lc[c] & ~s->offMask[c]) == 0) return 0;
+    for (int u = 0; u < 27; u++) {
+        int have = 0;
+        int left = 0;
+        for (int k = 0; k < 9; k++) {
+            int c = SUDOKU_UNITS[u][k];
+            have |= s->lc[c];
+            left |= s->lc[c] & ~s->offMask[c];
+        }
+        if ((have & ~left) != 0) return 0;
+    }
+    return 1;
+}
+
+static int nishio(Sudoku *s) {
+    prepareUnits(s);
+    s->groupCount = 0;
+    buildLinks(s, 30);
+    memset(s->elimBest, 0, sizeof(s->elimBest));
+    int any = 0;
+    for (int node = 0; node < 729; node++) {
+        int c = node / 9;
+        int b = 1 << (node % 9);
+        if ((s->lc[c] & b) == 0 || reachConsistent(s, node)) continue;
+        s->elimBest[c] |= b;
+        any = 1;
+    }
+    if (!any) return 0;
+    for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
+    return 1;
+}
+
+static void joinStatic(Sudoku *s) {
+    for (int q = 0; q < 81; q++) s->unionMask[q] |= s->onMask[q] != 0 ? s->onMask[q] : s->lc[q] & ~s->offMask[q];
+}
+
+static int narrow(Sudoku *s) {
+    int changed = 0;
+    for (int q = 0; q < 81; q++) {
+        if ((s->lc[q] & ~s->unionMask[q]) == 0) continue;
+        s->lc[q] &= s->unionMask[q];
+        changed = 1;
+    }
+    return changed;
+}
+
+static int cellForcing(Sudoku *s) {
+    prepareUnits(s);
+    s->groupCount = 0;
+    buildLinks(s, 30);
+    for (int c = 0; c < 81; c++) {
+        int m = s->lc[c];
+        if (__builtin_popcount(m) < 2) continue;
+        memset(s->unionMask, 0, sizeof(s->unionMask));
+        int branches = 0;
+        for (int rest = m; rest != 0; rest &= rest - 1) {
+            if (!reachConsistent(s, c * 9 + __builtin_ctz(rest))) continue;
+            branches++;
+            joinStatic(s);
+        }
+        if (branches != 0 && narrow(s)) return 1;
+    }
+    return 0;
+}
+
+static int unitForcing(Sudoku *s) {
+    prepareUnits(s);
+    s->groupCount = 0;
+    buildLinks(s, 30);
+    for (int u = 0; u < 27; u++) {
+        for (int d = 1; d <= 9; d++) {
+            int m = s->unitPos[u * 9 + d - 1];
+            if (__builtin_popcount(m) < 2) continue;
+            memset(s->unionMask, 0, sizeof(s->unionMask));
+            int branches = 0;
+            for (int rest = m; rest != 0; rest &= rest - 1) {
+                if (!reachConsistent(s, SUDOKU_UNITS[u][__builtin_ctz(rest)] * 9 + d - 1)) continue;
+                branches++;
+                joinStatic(s);
+            }
+            if (branches != 0 && narrow(s)) return 1;
+        }
+    }
+    return 0;
+}
+
+static void assign(Sudoku *s, int at, int c, int d) {
+    int keep = ~sudoku_bit(d);
+    s->sv[at + c] = d;
+    s->sc[at + c] = 0;
+    for (int k = 0; k < 20; k++) s->sc[at + SUDOKU_PEERS[c][k]] &= keep;
+}
+
+static int settle(Sudoku *s, int level) {
+    int at = level * 81;
+    for (;;) {
+        int progress = 0;
+        for (int c = 0; c < 81; c++) {
+            if (s->sv[at + c] != 0) continue;
+            int m = s->sc[at + c];
+            if (m == 0) return 0;
+            if (__builtin_popcount(m) == 1) {
+                assign(s, at, c, sudoku_digit(m));
+                progress = 1;
+            }
+        }
+        for (int u = 0; u < 27; u++) {
+            const int *cells = SUDOKU_UNITS[u];
+            int once = 0;
+            int twice = 0;
+            int placed = 0;
+            for (int k = 0; k < 9; k++) {
+                int c = cells[k];
+                if (s->sv[at + c] != 0) {
+                    int b = sudoku_bit(s->sv[at + c]);
+                    if ((placed & b) != 0) return 0;
+                    placed |= b;
+                    continue;
+                }
+                int m = s->sc[at + c];
+                twice |= once & m;
+                once |= m;
+            }
+            if ((once | placed) != SUDOKU_ALL) return 0;
+            for (int single = once & ~twice & ~placed; single != 0; single &= single - 1) {
+                int b = single & -single;
+                for (int k = 0; k < 9; k++) {
+                    int c = cells[k];
+                    if (s->sv[at + c] != 0 || (s->sc[at + c] & b) == 0) continue;
+                    assign(s, at, c, sudoku_digit(b));
+                    progress = 1;
+                    break;
+                }
+            }
+        }
+        if (!progress) return 1;
+    }
+}
+
+static int settleNested(Sudoku *s, int level);
+
+static int branch(Sudoku *s, int level, int from, int cell, int d) {
+    int at = level * 81;
+    if (from < 0) {
+        memcpy(s->sv + at, s->lv, sizeof(s->lv));
+        memcpy(s->sc + at, s->lc, sizeof(s->lc));
+    } else {
+        memcpy(s->sv + at, s->sv + from * 81, sizeof(int) * 81);
+        memcpy(s->sc + at, s->sc + from * 81, sizeof(int) * 81);
+    }
+    if ((s->sc[at + cell] & sudoku_bit(d)) == 0) return 0;
+    assign(s, at, cell, d);
+    return settleNested(s, level);
+}
+
+static int settleNested(Sudoku *s, int level) {
+    if (!settle(s, level)) return 0;
+    if (level == 0) return 1;
+    int at = level * 81;
+    int changed = 1;
+    while (changed) {
+        changed = 0;
+        for (int q = 0; q < 81; q++) {
+            for (int rest = s->sc[at + q]; rest != 0; rest &= rest - 1) {
+                int b = rest & -rest;
+                if ((s->sc[at + q] & b) == 0 || branch(s, level - 1, level, q, __builtin_ctz(b) + 1)) continue;
+                s->sc[at + q] &= ~b;
+                changed = 1;
+                if (!settle(s, level)) return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+static void joinDynamic(Sudoku *s) {
+    for (int q = 0; q < 81; q++) s->unionMask[q] |= s->sv[q] != 0 ? sudoku_bit(s->sv[q]) : s->sc[q];
+}
+
+static int dynamicNet(Sudoku *s) {
+    memset(s->elimBest, 0, sizeof(s->elimBest));
+    int any = 0;
+    for (int c = 0; c < 81; c++) {
+        for (int rest = s->lc[c]; rest != 0; rest &= rest - 1) {
+            if (branch(s, 0, -1, c, __builtin_ctz(rest) + 1)) continue;
+            s->elimBest[c] |= rest & -rest;
+            any = 1;
+        }
+    }
+    if (any) {
+        for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
+        return 1;
+    }
+    for (int c = 0; c < 81; c++) {
+        if (__builtin_popcount(s->lc[c]) < 2) continue;
+        memset(s->unionMask, 0, sizeof(s->unionMask));
+        int branches = 0;
+        for (int rest = s->lc[c]; rest != 0; rest &= rest - 1) {
+            if (!branch(s, 0, -1, c, __builtin_ctz(rest) + 1)) continue;
+            branches++;
+            joinDynamic(s);
+        }
+        if (branches != 0 && narrow(s)) return 1;
+    }
+    for (int u = 0; u < 27; u++) {
+        for (int d = 1; d <= 9; d++) {
+            int m = unitMask(s, SUDOKU_UNITS[u], sudoku_bit(d));
+            if (__builtin_popcount(m) < 2) continue;
+            memset(s->unionMask, 0, sizeof(s->unionMask));
+            int branches = 0;
+            for (int rest = m; rest != 0; rest &= rest - 1) {
+                if (!branch(s, 0, -1, SUDOKU_UNITS[u][__builtin_ctz(rest)], d)) continue;
+                branches++;
+                joinDynamic(s);
+            }
+            if (branches != 0 && narrow(s)) return 1;
+        }
+    }
+    return 0;
+}
+
+static int nestedNet(Sudoku *s) {
+    for (int level = 1; level <= SUDOKU_MAX_NEST; level++) {
+        for (int c = 0; c < 81; c++) {
+            for (int rest = s->lc[c]; rest != 0; rest &= rest - 1) {
+                if (branch(s, level, -1, c, __builtin_ctz(rest) + 1)) continue;
+                s->lc[c] &= ~(rest & -rest);
+                s->stepRating = SUDOKU_TECH_BASE[41] + level - 1;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static int apply(Sudoku *s, int id) {
     switch (id) {
         case 0: return singles(s);
@@ -1766,6 +2032,11 @@ static int apply(Sudoku *s, int id) {
         case 34: return alsXyWing(s);
         case 35: return deathBlossom(s);
         case 36: return alsChain(s);
+        case 37: return nishio(s);
+        case 38: return cellForcing(s);
+        case 39: return unitForcing(s);
+        case 40: return dynamicNet(s);
+        case 41: return nestedNet(s);
     }
     return 0;
 }

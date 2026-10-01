@@ -34,7 +34,7 @@ final class Sudoku {
         }
     }
 
-    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82};
+    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95};
     static final int TECH_COUNT = TECH_BASE.length;
     static final int MASTER_RATING = 65;
     static final int LEVELS = 5;
@@ -1792,6 +1792,277 @@ final class Sudoku {
         return any;
     }
 
+    static final int MAX_NEST = 8;
+    private final int[] offMask = new int[81];
+    private final int[] onMask = new int[81];
+    private final int[] union = new int[81];
+    private final int[] sv = new int[81 * (MAX_NEST + 1)];
+    private final int[] sc = new int[81 * (MAX_NEST + 1)];
+
+    private boolean reachConsistent(int node) {
+        if (++markValue >= 0x7fffffff) {
+            Arrays.fill(mark, 0);
+            markValue = 1;
+        }
+        int stamp = markValue;
+        int origin = node * 2 + 1;
+        mark[origin] = stamp;
+        int head = 0;
+        int tail = 0;
+        queue[tail++] = origin;
+        while (head < tail) {
+            int st = queue[head++];
+            for (int k = linkStart[st]; k < linkStart[st + 1]; k++) {
+                int ch = linkTo[k];
+                if (mark[ch] == stamp) continue;
+                if (mark[ch ^ 1] == stamp) return false;
+                mark[ch] = stamp;
+                queue[tail++] = ch;
+            }
+        }
+        Arrays.fill(offMask, 0);
+        Arrays.fill(onMask, 0);
+        for (int k = 0; k < tail; k++) {
+            int st = queue[k];
+            int n = st >> 1;
+            int c = n / 9;
+            int b = 1 << (n % 9);
+            if ((st & 1) != 0) onMask[c] |= b;
+            else offMask[c] |= b;
+        }
+        for (int c = 0; c < 81; c++) if (lc[c] != 0 && (lc[c] & ~offMask[c]) == 0) return false;
+        for (int u = 0; u < 27; u++) {
+            int have = 0;
+            int left = 0;
+            for (int k = 0; k < 9; k++) {
+                int c = UNITS[u][k];
+                have |= lc[c];
+                left |= lc[c] & ~offMask[c];
+            }
+            if ((have & ~left) != 0) return false;
+        }
+        return true;
+    }
+
+    boolean nishio() {
+        prepareUnits();
+        groupCount = 0;
+        buildLinks(30);
+        Arrays.fill(elimBest, 0);
+        boolean any = false;
+        for (int node = 0; node < 729; node++) {
+            int c = node / 9;
+            int b = 1 << (node % 9);
+            if ((lc[c] & b) == 0 || reachConsistent(node)) continue;
+            elimBest[c] |= b;
+            any = true;
+        }
+        if (!any) return false;
+        for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
+        return true;
+    }
+
+    private void joinStatic() {
+        for (int q = 0; q < 81; q++) union[q] |= onMask[q] != 0 ? onMask[q] : lc[q] & ~offMask[q];
+    }
+
+    private boolean narrow() {
+        boolean changed = false;
+        for (int q = 0; q < 81; q++) {
+            if ((lc[q] & ~union[q]) == 0) continue;
+            lc[q] &= union[q];
+            changed = true;
+        }
+        return changed;
+    }
+
+    boolean cellForcing() {
+        prepareUnits();
+        groupCount = 0;
+        buildLinks(30);
+        for (int c = 0; c < 81; c++) {
+            int m = lc[c];
+            if (Integer.bitCount(m) < 2) continue;
+            Arrays.fill(union, 0);
+            int branches = 0;
+            for (int rest = m; rest != 0; rest &= rest - 1) {
+                if (!reachConsistent(c * 9 + Integer.numberOfTrailingZeros(rest))) continue;
+                branches++;
+                joinStatic();
+            }
+            if (branches != 0 && narrow()) return true;
+        }
+        return false;
+    }
+
+    boolean unitForcing() {
+        prepareUnits();
+        groupCount = 0;
+        buildLinks(30);
+        for (int u = 0; u < 27; u++) {
+            for (int d = 1; d <= 9; d++) {
+                int m = unitPos[u * 9 + d - 1];
+                if (Integer.bitCount(m) < 2) continue;
+                Arrays.fill(union, 0);
+                int branches = 0;
+                for (int rest = m; rest != 0; rest &= rest - 1) {
+                    if (!reachConsistent(UNITS[u][Integer.numberOfTrailingZeros(rest)] * 9 + d - 1)) continue;
+                    branches++;
+                    joinStatic();
+                }
+                if (branches != 0 && narrow()) return true;
+            }
+        }
+        return false;
+    }
+
+    private void assign(int at, int c, int d) {
+        int keep = ~bit(d);
+        sv[at + c] = d;
+        sc[at + c] = 0;
+        for (int p : PEERS[c]) sc[at + p] &= keep;
+    }
+
+    private boolean settle(int level) {
+        int at = level * 81;
+        while (true) {
+            boolean progress = false;
+            for (int c = 0; c < 81; c++) {
+                if (sv[at + c] != 0) continue;
+                int m = sc[at + c];
+                if (m == 0) return false;
+                if (Integer.bitCount(m) == 1) {
+                    assign(at, c, digit(m));
+                    progress = true;
+                }
+            }
+            for (int u = 0; u < 27; u++) {
+                int[] cells = UNITS[u];
+                int once = 0;
+                int twice = 0;
+                int placed = 0;
+                for (int k = 0; k < 9; k++) {
+                    int c = cells[k];
+                    if (sv[at + c] != 0) {
+                        int b = bit(sv[at + c]);
+                        if ((placed & b) != 0) return false;
+                        placed |= b;
+                        continue;
+                    }
+                    int m = sc[at + c];
+                    twice |= once & m;
+                    once |= m;
+                }
+                if ((once | placed) != ALL) return false;
+                for (int single = once & ~twice & ~placed; single != 0; single &= single - 1) {
+                    int b = single & -single;
+                    for (int k = 0; k < 9; k++) {
+                        int c = cells[k];
+                        if (sv[at + c] != 0 || (sc[at + c] & b) == 0) continue;
+                        assign(at, c, digit(b));
+                        progress = true;
+                        break;
+                    }
+                }
+            }
+            if (!progress) return true;
+        }
+    }
+
+    private boolean branch(int level, int from, int cell, int d) {
+        int at = level * 81;
+        if (from < 0) {
+            System.arraycopy(lv, 0, sv, at, 81);
+            System.arraycopy(lc, 0, sc, at, 81);
+        } else {
+            System.arraycopy(sv, from * 81, sv, at, 81);
+            System.arraycopy(sc, from * 81, sc, at, 81);
+        }
+        if ((sc[at + cell] & bit(d)) == 0) return false;
+        assign(at, cell, d);
+        return settleNested(level);
+    }
+
+    private boolean settleNested(int level) {
+        if (!settle(level)) return false;
+        if (level == 0) return true;
+        int at = level * 81;
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (int q = 0; q < 81; q++) {
+                for (int rest = sc[at + q]; rest != 0; rest &= rest - 1) {
+                    int b = rest & -rest;
+                    if ((sc[at + q] & b) == 0 || branch(level - 1, level, q, Integer.numberOfTrailingZeros(b) + 1)) continue;
+                    sc[at + q] &= ~b;
+                    changed = true;
+                    if (!settle(level)) return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private void joinDynamic() {
+        for (int q = 0; q < 81; q++) union[q] |= sv[q] != 0 ? bit(sv[q]) : sc[q];
+    }
+
+    boolean dynamicNet() {
+        Arrays.fill(elimBest, 0);
+        boolean any = false;
+        for (int c = 0; c < 81; c++) {
+            for (int rest = lc[c]; rest != 0; rest &= rest - 1) {
+                if (branch(0, -1, c, Integer.numberOfTrailingZeros(rest) + 1)) continue;
+                elimBest[c] |= rest & -rest;
+                any = true;
+            }
+        }
+        if (any) {
+            for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
+            return true;
+        }
+        for (int c = 0; c < 81; c++) {
+            if (Integer.bitCount(lc[c]) < 2) continue;
+            Arrays.fill(union, 0);
+            int branches = 0;
+            for (int rest = lc[c]; rest != 0; rest &= rest - 1) {
+                if (!branch(0, -1, c, Integer.numberOfTrailingZeros(rest) + 1)) continue;
+                branches++;
+                joinDynamic();
+            }
+            if (branches != 0 && narrow()) return true;
+        }
+        for (int u = 0; u < 27; u++) {
+            for (int d = 1; d <= 9; d++) {
+                int m = unitMask(UNITS[u], bit(d));
+                if (Integer.bitCount(m) < 2) continue;
+                Arrays.fill(union, 0);
+                int branches = 0;
+                for (int rest = m; rest != 0; rest &= rest - 1) {
+                    if (!branch(0, -1, UNITS[u][Integer.numberOfTrailingZeros(rest)], d)) continue;
+                    branches++;
+                    joinDynamic();
+                }
+                if (branches != 0 && narrow()) return true;
+            }
+        }
+        return false;
+    }
+
+    boolean nestedNet() {
+        for (int level = 1; level <= MAX_NEST; level++) {
+            for (int c = 0; c < 81; c++) {
+                for (int rest = lc[c]; rest != 0; rest &= rest - 1) {
+                    if (branch(level, -1, c, Integer.numberOfTrailingZeros(rest) + 1)) continue;
+                    lc[c] &= ~(rest & -rest);
+                    stepRating = TECH_BASE[41] + level - 1;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     int techLimit = TECH_COUNT;
     final boolean[] techOff = new boolean[TECH_COUNT];
     int stepRating;
@@ -1841,6 +2112,11 @@ final class Sudoku {
             case 34: return alsXyWing();
             case 35: return deathBlossom();
             case 36: return alsChain();
+            case 37: return nishio();
+            case 38: return cellForcing();
+            case 39: return unitForcing();
+            case 40: return dynamicNet();
+            case 41: return nestedNet();
         }
         return false;
     }

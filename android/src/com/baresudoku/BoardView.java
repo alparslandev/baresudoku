@@ -55,7 +55,9 @@ final class BoardView extends View implements Runnable {
         "Empty Rectangle", "Remote Pair", "WXYZ-Wing", "Unique Rectangle Type 2", "Unique Rectangle Type 3",
         "Unique Rectangle Type 4", "Unique Rectangle Type 5", "Unique Rectangle Type 6", "Hidden Rectangle", "BUG+1",
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
-        "Death Blossom", "ALS Chain"};
+        "Death Blossom", "ALS Chain",
+        "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
+        "Nested Forcing Net"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -66,7 +68,9 @@ final class BoardView extends View implements Runnable {
         "Empty Rectangle", "Remote Pair", "WXYZ-Wing", "Unique Rectangle Type 2", "Unique Rectangle Type 3",
         "Unique Rectangle Type 4", "Unique Rectangle Type 5", "Unique Rectangle Type 6", "Hidden Rectangle", "BUG+1",
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
-        "Death Blossom", "ALS Chain"};
+        "Death Blossom", "ALS Chain",
+        "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
+        "Nested Forcing Net"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;

@@ -9,7 +9,8 @@
 #define SUDOKU_MAX_LINKS 131072
 #define SUDOKU_MAX_ALS 1024
 #define SUDOKU_MAX_ALS_LINKS 131072
-#define SUDOKU_TECH_COUNT 37
+#define SUDOKU_MAX_NEST 8
+#define SUDOKU_TECH_COUNT 42
 #define SUDOKU_MASTER_RATING 65
 #define SUDOKU_LEVELS 5
 
@@ -73,6 +74,11 @@ typedef struct Sudoku {
     int alsFirst[SUDOKU_MAX_ALS * 9];
     int alsDepth[SUDOKU_MAX_ALS * 9];
     int alsQueue[SUDOKU_MAX_ALS * 9];
+    int offMask[81];
+    int onMask[81];
+    int unionMask[81];
+    int sv[81 * (SUDOKU_MAX_NEST + 1)];
+    int sc[81 * (SUDOKU_MAX_NEST + 1)];
     int techLimit;
     unsigned char techOff[SUDOKU_TECH_COUNT];
     int stepRating;
