@@ -53,7 +53,7 @@ static void hintWalk(Sudoku *e, const int *puzzle, const int *solution) {
     memcpy(values, puzzle, sizeof(values));
     int steps = 0;
     while (count(values) < 81) {
-        check(sudoku_hint(e, values), "ipucu bulunamadi");
+        check(sudoku_hint(e, values, puzzle), "ipucu bulunamadi");
         if (values[e->stepCell] != 0) {
             check(0, "ipucu dolu hucreye geldi");
             return;
@@ -203,7 +203,7 @@ int main(int argc, char **argv) {
     for (int level = 0; level < 4; level++) {
         double start = nowMs();
         int clues = 0;
-        int techniques[7] = {0};
+        int techniques[11] = {0};
         for (int i = 0; i < n; i++) {
             int puzzle[81];
             sudoku_generate(&engine, level, puzzle);
@@ -212,15 +212,16 @@ int main(int argc, char **argv) {
             check(sudoku_count_solutions(&engine, puzzle, 2) == 1, "tek cozum yok");
             check(memcmp(engine.found, solution, sizeof(solution)) == 0, "cozum tam izgarayla eslesmiyor");
             int r = verifiedRate(&engine, puzzle, solution);
-            int levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 6;
+            int levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 10;
             check(levelOk, "seviye derecesi yanlis");
-            if (r >= 0 && r < 7) techniques[r]++;
+            if (r >= 0 && r < 11) techniques[r]++;
             clues += count(puzzle);
             hintWalk(&engine, puzzle, solution);
         }
         double ms = nowMs() - start;
-        printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi [%d, %d, %d, %d, %d, %d, %d]\n",
-            LEVELS[level], n, clues / (double)n, ms / n, techniques[0], techniques[1], techniques[2], techniques[3], techniques[4], techniques[5], techniques[6]);
+        printf("%-6s %4d bulmaca, ort ipucu %.1f, %5.1f ms/bulmaca, teknik dagilimi [", LEVELS[level], n, clues / (double)n, ms / n);
+        for (int k = 0; k < 11; k++) printf(k ? ", %d" : "%d", techniques[k]);
+        printf("]\n");
     }
     gameTests(&engine);
     stickyTests(&engine);

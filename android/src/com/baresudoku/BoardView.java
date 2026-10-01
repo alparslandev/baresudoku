@@ -44,16 +44,19 @@ final class BoardView extends View implements Runnable {
     static final int S_ROWLABEL = 30;
     static final int S_COLLABEL = 31;
     static final int S_LEFT = 32;
+    static final int S_TECH_EXTRA = 33;
     static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
         "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
         "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
         "Only place for # in this box", "Tap hint again to place it", "Locked candidates", "Pair or triple",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Restart", "Row", "Column", "# left"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Restart", "Row", "Column", "# left",
+        "Skyscraper", "2-String Kite", "W-Wing", "Unique Rectangle"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
         "Bu kutuda # için tek yer", "Yerleştirmek için ipucuna tekrar bas", "Kilitli adaylar", "Çift veya üçlü",
-        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Baştan başla", "Satır", "Sütun", "# kaldı"};
+        "X-Wing", "Y-Wing", "Swordfish", "XYZ-Wing", "Bare Sudoku", "Baştan başla", "Satır", "Sütun", "# kaldı",
+        "Skyscraper", "2-String Kite", "W-Wing", "Unique Rectangle"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -435,7 +438,8 @@ final class BoardView extends View implements Runnable {
         if (game.hintKind == Game.HINT_WRONG) return text[S_WRONG];
         int u = game.hintUnit;
         String s = text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : S_NAKED].replace("#", DIGITS[game.hintDigit]);
-        if (game.hintTech > 0) s = s + " (" + text[S_TECH + game.hintTech - 1] + ")";
+        int t = game.hintTech;
+        if (t > 0) s = s + " (" + text[t < 7 ? S_TECH + t - 1 : S_TECH_EXTRA + t - 7] + ")";
         return s;
     }
 

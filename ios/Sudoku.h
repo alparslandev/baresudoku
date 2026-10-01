@@ -43,7 +43,7 @@ int sudoku_complete(const Sudoku *s);
 int sudoku_stuck(const Sudoku *s);
 int sudoku_step(Sudoku *s);
 int sudoku_rate(Sudoku *s, const int *puzzle);
-int sudoku_hint(Sudoku *s, const int *values);
+int sudoku_hint(Sudoku *s, const int *values, const int *givens);
 void sudoku_generate(Sudoku *s, int level, int *puzzle);
 
 #endif

@@ -226,7 +226,7 @@ final class Game {
                 return true;
             }
         }
-        if (!engine.hint(value)) return false;
+        if (!engine.hint(value, given)) return false;
         hintKind = HINT_PLACE;
         hintCell = engine.stepCell;
         hintDigit = engine.stepDigit;

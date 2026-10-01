@@ -237,7 +237,7 @@ int game_hint(Game *g, Sudoku *engine) {
             return 1;
         }
     }
-    if (!sudoku_hint(engine, g->value)) return 0;
+    if (!sudoku_hint(engine, g->value, g->given)) return 0;
     g->hintKind = HINT_PLACE;
     g->hintCell = engine->stepCell;
     g->hintDigit = engine->stepDigit;

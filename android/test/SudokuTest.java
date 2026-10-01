@@ -12,14 +12,14 @@ final class SudokuTest {
         for (int level = 0; level < 4; level++) {
             long start = System.nanoTime();
             int clues = 0;
-            int[] techniques = new int[7];
+            int[] techniques = new int[11];
             for (int i = 0; i < n; i++) {
                 int[] puzzle = engine.generate(level);
                 int[] solution = engine.solution;
                 check(engine.countSolutions(puzzle, 2) == 1, "tek cozum yok");
                 check(Arrays.equals(engine.found, solution), "cozum tam izgarayla eslesmiyor");
                 int r = verifiedRate(engine, puzzle, solution);
-                boolean levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 6;
+                boolean levelOk = level < 2 ? r == 0 : level == 2 ? r >= 1 && r <= 2 : r >= 3 && r <= 10;
                 check(levelOk, LEVELS[level] + " icin derece " + r);
                 techniques[r]++;
                 clues += count(puzzle);
@@ -56,13 +56,13 @@ final class SudokuTest {
         int[] values = puzzle.clone();
         int steps = 0;
         while (count(values) < 81) {
-            check(e.hint(values), "ipucu bulunamadi");
+            check(e.hint(values, puzzle), "ipucu bulunamadi");
             if (values[e.stepCell] != 0) {
                 check(false, "ipucu dolu hucreye geldi");
                 return;
             }
             check(solution[e.stepCell] == e.stepDigit, "ipucu rakami yanlis");
-            check(e.hintTech >= 0 && e.hintTech <= 6, "ipucu teknigi aralik disi");
+            check(e.hintTech >= 0 && e.hintTech <= 10, "ipucu teknigi aralik disi");
             values[e.stepCell] = e.stepDigit;
             if (++steps > 81) {
                 check(false, "ipucu yuruyusu bitmedi");
