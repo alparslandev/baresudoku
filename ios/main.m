@@ -5,7 +5,8 @@
 #include "Game.h"
 
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
-    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33 };
+    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
+    S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7 };
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -19,7 +20,7 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"X-Chain", @"XY-Chain", @"Continuous Nice Loop", @"AIC", @"Grouped AIC", @"Sue de Coq", @"ALS-XZ",
     @"ALS-XY-Wing", @"Death Blossom", @"ALS Chain",
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
-    @"Nested Forcing Net"};
+    @"Nested Forcing Net", @"Master"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -32,7 +33,7 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"X-Chain", @"XY-Chain", @"Continuous Nice Loop", @"AIC", @"Grouped AIC", @"Sue de Coq", @"ALS-XZ",
     @"ALS-XY-Wing", @"Death Blossom", @"ALS Chain",
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
-    @"Nested Forcing Net"};
+    @"Nested Forcing Net", @"Usta"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
@@ -539,7 +540,7 @@ static BoardView *current;
     CGFloat size = topH * 0.42;
     CGFloat cy = topY + topH / 2;
     if (level >= 0) {
-        NSString *s = text[level];
+        NSString *s = [self levelName:level];
         drawText(s, topX + topH * 0.2 + textWidth(s, size, 1) / 2, cy, size, cKeyText, 1);
     }
     if (game.active && !generating) drawText([self clockString:game_time(&game, nowMs())], topX + topW / 2, cy, size, cMuted, 2);
@@ -557,10 +558,10 @@ static BoardView *current;
     CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
     CGFloat base = MIN(w - insetL - insetR, h - insetT - insetB);
     menuW = base * 0.82;
-    menuRowH = base * 0.105;
+    menuRowH = base * 0.095;
     BOOL solved = game.active && game.solved;
     menuTitleH = menuRowH * (solved ? 2.2 : 1.6);
-    menuRows = [self cancellable] ? 7 : 5;
+    menuRows = [self cancellable] ? 8 : 6;
     CGFloat total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4;
     menuX = insetL + (w - insetL - insetR - menuW) / 2;
     menuTop = insetT + (h - insetT - insetB - total) / 2;
@@ -582,7 +583,7 @@ static BoardView *current;
     drawText(text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5, cKeyText, 1);
     y += menuRowH * 0.6;
     if (solved) {
-        drawText([NSString stringWithFormat:@"%@  %@", text[game.level], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
+        drawText([NSString stringWithFormat:@"%@  %@", [self levelName:game.level], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
         y += menuRowH * 0.6;
     }
     drawText(text[S_NEW], cx, y, menuRowH * 0.34, cMuted, 0);
@@ -612,17 +613,17 @@ static BoardView *current;
 }
 
 - (void)menuAction:(int)t {
-    if (t >= 400 && t < 404) {
+    if (t >= 400 && t < 405) {
         [self startGame:t - 400];
-    } else if (t == 404) {
+    } else if (t == 405) {
         game.showErrors = !game.showErrors;
         saveGame();
         [self setNeedsDisplay];
-    } else if (t == 405 && [self cancellable]) {
+    } else if (t == 406 && [self cancellable]) {
         game_restart(&game);
         saveGame();
         [self closeMenu];
-    } else if ((t == 406 || t == 499) && [self cancellable]) {
+    } else if ((t == 407 || t == 499) && [self cancellable]) {
         [self closeMenu];
     }
 }
@@ -828,10 +829,14 @@ static BoardView *current;
     return hour > 0 ? [NSString stringWithFormat:@"%lld:%02lld:%02lld", hour, min, sec] : [NSString stringWithFormat:@"%lld:%02lld", min, sec];
 }
 
+- (NSString *)levelName:(int)level {
+    return text[level < 4 ? level : S_MASTER];
+}
+
 - (NSString *)menuLabel:(int)row {
-    if (row < 4) return text[row];
-    if (row == 4) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
-    return text[row == 5 ? S_RESTART : S_CANCEL];
+    if (row < 5) return [self levelName:row];
+    if (row == 5) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
+    return text[row == 6 ? S_RESTART : S_CANCEL];
 }
 
 - (BOOL)isAccessibilityElement {
@@ -874,7 +879,7 @@ static BoardView *current;
     if ([self overlay]) {
         [self layoutMenu];
         BOOL solved = game.active && game.solved;
-        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], text[game.level], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
+        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], [self levelName:game.level], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
         [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[NSString stringWithFormat:@"%@. %@", title, text[S_NEW]] value:nil traits:UIAccessibilityTraitHeader]];
         for (int row = 0; row < menuRows; row++) {
             [list addObject:[self axElement:400 + row frame:CGRectMake(menuX, [self menuRowY:row], menuW, menuRowH) label:[self menuLabel:row] value:nil traits:UIAccessibilityTraitButton]];
@@ -882,7 +887,7 @@ static BoardView *current;
         return list;
     }
     BOOL playable = game.active && !game.solved;
-    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", text[game.level], [self clockString:game_time(&game, nowMs())]] : @"";
+    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", [self levelName:game.level], [self clockString:game_time(&game, nowMs())]] : @"";
     [list addObject:[self axElement:301 frame:CGRectMake(topX, topY, topW - topH * 0.9, topH) label:top value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
     [list addObject:[self axElement:300 frame:[self targetRect:300] label:text[S_NEW] value:nil traits:UIAccessibilityTraitButton]];
     if (game.active && game_hint_active(&game)) {
@@ -953,7 +958,7 @@ static BoardView *current;
     else if (step == 4) [self press:[self cellPoint:1]];
     else if (step == 5) [self press:CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2)];
     else if (step == 6) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)];
-    else if (step == 7) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:6] + menuRowH / 2)]; }
+    else if (step == 7) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:7] + menuRowH / 2)]; }
     NSLog(@"selftest %d: active=%d pending=%d sel=%d sticky=%d note=%d v0=%d given0=%d n1=%d given1=%d hint=%d menu=%d rows=%d", step, game.active, pendingLevel, game.selected, game.sticky, game.noteMode, game.value[0], game.given[0], game.notes[1], game.given[1], game.hintKind, menuOpen, menuRows);
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
 }
@@ -986,7 +991,7 @@ static BoardView *current;
     }
     else if (step == 15) { [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)]; [self press:hint]; [self snapshot:@"3-hint"]; }
     else if (step == 16) { [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)]; [self snapshot:@"4-menu"]; }
-    else if (step == 17) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:6] + menuRowH / 2)]; }
+    else if (step == 17) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:7] + menuRowH / 2)]; }
     else if (step == 18) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     else if (step == 19) { [self applyTheme]; [self snapshot:@"5-dark"]; }
     NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d size=%.0fx%.0f", step, game.selected, game.sticky, game.hintKind, menuOpen, self.bounds.size.width, self.bounds.size.height);

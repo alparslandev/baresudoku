@@ -45,6 +45,7 @@ final class BoardView extends View implements Runnable {
     static final int S_COLLABEL = 31;
     static final int S_LEFT = 32;
     static final int S_TECH_EXTRA = 33;
+    static final int S_MASTER = S_TECH_EXTRA + Sudoku.TECH_COUNT - 7;
     static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
         "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
         "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
@@ -57,7 +58,7 @@ final class BoardView extends View implements Runnable {
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
         "Death Blossom", "ALS Chain",
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
-        "Nested Forcing Net"};
+        "Nested Forcing Net", "Master"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -70,7 +71,7 @@ final class BoardView extends View implements Runnable {
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
         "Death Blossom", "ALS Chain",
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
-        "Nested Forcing Net"};
+        "Nested Forcing Net", "Usta"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -558,7 +559,7 @@ final class BoardView extends View implements Runnable {
         float size = topH * 0.42f;
         float cy = topY + topH / 2;
         if (level >= 0) {
-            String s = text[level];
+            String s = levelName(level);
             drawText(c, s, topX + topH * 0.2f + width(s, size, Typeface.DEFAULT_BOLD) / 2, cy, size, cKeyText, Typeface.DEFAULT_BOLD);
         }
         if (game.active && !generating) {
@@ -577,10 +578,10 @@ final class BoardView extends View implements Runnable {
     private void layoutMenu(int w, int h) {
         float base = Math.min(w - insetL - insetR, h - insetT - insetB);
         menuW = base * 0.82f;
-        menuRowH = base * 0.105f;
+        menuRowH = base * 0.095f;
         boolean solved = game.active && game.solved;
         menuTitleH = menuRowH * (solved ? 2.2f : 1.6f);
-        menuRows = cancellable() ? 7 : 5;
+        menuRows = cancellable() ? 8 : 6;
         float total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4f;
         menuX = insetL + (w - insetL - insetR - menuW) / 2;
         menuTop = insetT + (h - insetT - insetB - total) / 2;
@@ -601,7 +602,7 @@ final class BoardView extends View implements Runnable {
         drawText(c, text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5f, cKeyText, Typeface.DEFAULT_BOLD);
         y += menuRowH * 0.6f;
         if (solved) {
-            drawText(c, text[game.level] + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
+            drawText(c, levelName(game.level) + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
             y += menuRowH * 0.6f;
         }
         drawText(c, text[S_NEW], cx, y, menuRowH * 0.34f, cMuted, Typeface.DEFAULT);
@@ -627,17 +628,17 @@ final class BoardView extends View implements Runnable {
     }
 
     private void menuAction(int t) {
-        if (t >= 400 && t < 404) {
+        if (t >= 400 && t < 405) {
             startGame(t - 400);
-        } else if (t == 404) {
+        } else if (t == 405) {
             game.showErrors = !game.showErrors;
             MainActivity.save();
             invalidate();
-        } else if (t == 405 && cancellable()) {
+        } else if (t == 406 && cancellable()) {
             game.restart();
             MainActivity.save();
             closeMenu();
-        } else if ((t == 406 || t == 499) && cancellable()) {
+        } else if ((t == 407 || t == 499) && cancellable()) {
             closeMenu();
         }
     }
@@ -669,10 +670,14 @@ final class BoardView extends View implements Runnable {
         sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
+    private String levelName(int level) {
+        return text[level < 4 ? level : S_MASTER];
+    }
+
     private String menuLabel(int row) {
-        if (row < 4) return text[row];
-        if (row == 4) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
-        return text[row == 5 ? S_RESTART : S_CANCEL];
+        if (row < 5) return levelName(row);
+        if (row == 5) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
+        return text[row == 6 ? S_RESTART : S_CANCEL];
     }
 
     public AccessibilityNodeProvider getAccessibilityNodeProvider() {
@@ -740,11 +745,11 @@ final class BoardView extends View implements Runnable {
         if (id == 420) return text[S_PREPARING];
         if (id == 410) {
             boolean solved = game.active && game.solved;
-            String title = solved ? text[S_SOLVED] + " " + text[game.level] + " " + clock(game.time(0)) : text[S_TITLE];
+            String title = solved ? text[S_SOLVED] + " " + levelName(game.level) + " " + clock(game.time(0)) : text[S_TITLE];
             return title + ". " + text[S_NEW];
         }
         if (id >= 400) return menuLabel(id - 400);
-        if (id == 301) return game.active ? text[game.level] + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
+        if (id == 301) return game.active ? levelName(game.level) + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
         if (id == 300) return text[S_NEW];
         if (id == 302) {
             String message = hintMessage();
