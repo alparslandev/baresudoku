@@ -5,18 +5,20 @@
 #include "Game.h"
 
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
-    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32 };
+    S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33 };
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
     @"Only one candidate here: #", @"Only place for # in this row", @"Only place for # in this column",
     @"Only place for # in this box", @"Tap hint again to place it", @"Locked candidates", @"Pair or triple",
-    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Restart", @"Row", @"Column", @"# left"};
+    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Restart", @"Row", @"Column", @"# left",
+    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
     @"Bu kutuda # için tek yer", @"Yerleştirmek için ipucuna tekrar bas", @"Kilitli adaylar", @"Çift veya üçlü",
-    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Baştan başla", @"Satır", @"Sütun", @"# kaldı"};
+    @"X-Wing", @"Y-Wing", @"Swordfish", @"XYZ-Wing", @"Bare Sudoku", @"Baştan başla", @"Satır", @"Sütun", @"# kaldı",
+    @"Skyscraper", @"2-String Kite", @"W-Wing", @"Unique Rectangle"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
@@ -442,7 +444,8 @@ static BoardView *current;
     if (game.hintKind == HINT_WRONG) return text[S_WRONG];
     int u = game.hintUnit;
     NSString *s = [text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : S_NAKED] stringByReplacingOccurrencesOfString:@"#" withString:DIGITS[game.hintDigit]];
-    if (game.hintTech > 0) s = [NSString stringWithFormat:@"%@ (%@)", s, text[S_TECH + game.hintTech - 1]];
+    int t = game.hintTech;
+    if (t > 0) s = [NSString stringWithFormat:@"%@ (%@)", s, text[t < 7 ? S_TECH + t - 1 : S_TECH_EXTRA + t - 7]];
     return s;
 }
 

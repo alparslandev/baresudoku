@@ -375,18 +375,22 @@ final class Sudoku {
 
     private final int[] lineMasks = new int[9];
 
+    private int unitMask(int[] cells, int b) {
+        int m = 0;
+        for (int k = 0; k < 9; k++) if ((lc[cells[k]] & b) != 0) m |= 1 << k;
+        return m;
+    }
+
+    private void fillLineMasks(int b, int t) {
+        for (int line = 0; line < 9; line++) lineMasks[line] = unitMask(UNITS[t * 9 + line], b);
+    }
+
     boolean fish(int size) {
         boolean changed = false;
         for (int d = 1; d <= 9; d++) {
             int b = bit(d);
             for (int t = 0; t < 2; t++) {
-                for (int line = 0; line < 9; line++) {
-                    int m = 0;
-                    for (int k = 0; k < 9; k++) {
-                        if ((lc[UNITS[t * 9 + line][k]] & b) != 0) m |= 1 << k;
-                    }
-                    lineMasks[line] = m;
-                }
+                fillLineMasks(b, t);
                 for (int l1 = 0; l1 < 9; l1++) {
                     int m1 = lineMasks[l1];
                     if (m1 == 0 || Integer.bitCount(m1) > size) continue;
@@ -484,6 +488,107 @@ final class Sudoku {
         return false;
     }
 
+    boolean skyscraper() {
+        for (int d = 1; d <= 9; d++) {
+            int b = bit(d);
+            for (int t = 0; t < 2; t++) {
+                fillLineMasks(b, t);
+                for (int l1 = 0; l1 < 9; l1++) {
+                    int m1 = lineMasks[l1];
+                    if (Integer.bitCount(m1) != 2) continue;
+                    for (int l2 = l1 + 1; l2 < 9; l2++) {
+                        int m2 = lineMasks[l2];
+                        if (Integer.bitCount(m2) != 2 || Integer.bitCount(m1 & m2) != 1) continue;
+                        int top1 = UNITS[t * 9 + l1][Integer.numberOfTrailingZeros(m1 & ~m2)];
+                        int top2 = UNITS[t * 9 + l2][Integer.numberOfTrailingZeros(m2 & ~m1)];
+                        if (clearSeeing(b, top1, top2, -1)) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    boolean twoStringKite() {
+        for (int d = 1; d <= 9; d++) {
+            int b = bit(d);
+            for (int r = 0; r < 9; r++) {
+                int rm = unitMask(UNITS[r], b);
+                if (Integer.bitCount(rm) != 2) continue;
+                int r0 = UNITS[r][Integer.numberOfTrailingZeros(rm)];
+                int r1 = UNITS[r][Integer.numberOfTrailingZeros(rm & (rm - 1))];
+                for (int c = 0; c < 9; c++) {
+                    int cm = unitMask(UNITS[9 + c], b);
+                    if (Integer.bitCount(cm) != 2) continue;
+                    int c0 = UNITS[9 + c][Integer.numberOfTrailingZeros(cm)];
+                    int c1 = UNITS[9 + c][Integer.numberOfTrailingZeros(cm & (cm - 1))];
+                    if (r0 == c0 || r0 == c1 || r1 == c0 || r1 == c1) continue;
+                    for (int i = 0; i < 2; i++) {
+                        int inBox = i == 0 ? r0 : r1;
+                        int rowEnd = i == 0 ? r1 : r0;
+                        for (int j = 0; j < 2; j++) {
+                            int boxMate = j == 0 ? c0 : c1;
+                            int colEnd = j == 0 ? c1 : c0;
+                            if (BOX[inBox] != BOX[boxMate]) continue;
+                            if (clearSeeing(b, rowEnd, colEnd, -1)) return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    boolean wWing() {
+        for (int p = 0; p < 81; p++) {
+            int m = lc[p];
+            if (Integer.bitCount(m) != 2) continue;
+            for (int q = p + 1; q < 81; q++) {
+                if (lc[q] != m || sees(p, q)) continue;
+                for (int rest = m; rest != 0; rest &= rest - 1) {
+                    int b = rest & -rest;
+                    for (int u = 0; u < 27; u++) {
+                        int um = unitMask(UNITS[u], b);
+                        if (Integer.bitCount(um) != 2) continue;
+                        int e1 = UNITS[u][Integer.numberOfTrailingZeros(um)];
+                        int e2 = UNITS[u][Integer.numberOfTrailingZeros(um & (um - 1))];
+                        if (!(sees(e1, p) && sees(e2, q)) && !(sees(e1, q) && sees(e2, p))) continue;
+                        if (clearSeeing(m & ~b, p, q, -1)) return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private final int[] corners = new int[4];
+
+    boolean uniqueRectangle() {
+        for (int r1 = 0; r1 < 9; r1++) {
+            for (int r2 = r1 + 1; r2 < 9; r2++) {
+                boolean sameBand = r1 / 3 == r2 / 3;
+                for (int c1 = 0; c1 < 9; c1++) {
+                    for (int c2 = c1 + 1; c2 < 9; c2++) {
+                        if (sameBand == (c1 / 3 == c2 / 3)) continue;
+                        corners[0] = r1 * 9 + c1;
+                        corners[1] = r1 * 9 + c2;
+                        corners[2] = r2 * 9 + c2;
+                        corners[3] = r2 * 9 + c1;
+                        for (int k = 0; k < 4; k++) {
+                            int target = corners[k];
+                            int m = lc[corners[(k + 1) & 3]];
+                            if (Integer.bitCount(m) != 2 || lc[corners[(k + 2) & 3]] != m || lc[corners[(k + 3) & 3]] != m) continue;
+                            if ((lc[target] & m) != m || lc[target] == m) continue;
+                            lc[target] &= ~m;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     int allowed;
     int hintTech;
     int[] solution;
@@ -496,6 +601,10 @@ final class Sudoku {
         if (yWing()) return 4;
         if (swordfish()) return 5;
         if (xyzWing()) return 6;
+        if (skyscraper()) return 7;
+        if (twoStringKite()) return 8;
+        if (wWing()) return 9;
+        if (uniqueRectangle()) return 10;
         return -1;
     }
 
@@ -516,20 +625,28 @@ final class Sudoku {
         return r >= 0 && r <= allowed;
     }
 
-    boolean hint(int[] values) {
+    boolean hint(int[] values, int[] givens) {
         load(values);
         hintTech = 0;
         while (!complete() && !stuck()) {
             int t = step();
-            if (t < 0) return false;
+            if (t < 0) break;
             if (t == 0) return true;
             if (t > hintTech) hintTech = t;
+        }
+        load(givens);
+        hintTech = 0;
+        while (!complete() && !stuck()) {
+            int t = step();
+            if (t < 0) return false;
+            if (t > hintTech) hintTech = t;
+            if (t == 0 && values[stepCell] == 0) return true;
         }
         return false;
     }
 
     int[] generate(int level) {
-        allowed = level < 2 ? 0 : level == 2 ? 2 : 6;
+        allowed = level < 2 ? 0 : level == 2 ? 2 : 10;
         int minClues = level == 0 ? 38 : 0;
         while (true) {
             int[] full = fullGrid();

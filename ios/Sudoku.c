@@ -384,18 +384,22 @@ static int fishClear(Sudoku *s, int b, int t, int coverMask, int baseMask) {
     return changed;
 }
 
+static int unitMask(const Sudoku *s, const int *cells, int b) {
+    int m = 0;
+    for (int k = 0; k < 9; k++) if ((s->lc[cells[k]] & b) != 0) m |= 1 << k;
+    return m;
+}
+
+static void fillLineMasks(Sudoku *s, int b, int t) {
+    for (int line = 0; line < 9; line++) s->lineMasks[line] = unitMask(s, SUDOKU_UNITS[t * 9 + line], b);
+}
+
 static int fish(Sudoku *s, int size) {
     int changed = 0;
     for (int d = 1; d <= 9; d++) {
         int b = sudoku_bit(d);
         for (int t = 0; t < 2; t++) {
-            for (int line = 0; line < 9; line++) {
-                int m = 0;
-                for (int k = 0; k < 9; k++) {
-                    if ((s->lc[SUDOKU_UNITS[t * 9 + line][k]] & b) != 0) m |= 1 << k;
-                }
-                s->lineMasks[line] = m;
-            }
+            fillLineMasks(s, b, t);
             for (int l1 = 0; l1 < 9; l1++) {
                 int m1 = s->lineMasks[l1];
                 if (m1 == 0 || __builtin_popcount(m1) > size) continue;
@@ -472,6 +476,106 @@ static int xyzWing(Sudoku *s) {
     return 0;
 }
 
+static int skyscraper(Sudoku *s) {
+    for (int d = 1; d <= 9; d++) {
+        int b = sudoku_bit(d);
+        for (int t = 0; t < 2; t++) {
+            fillLineMasks(s, b, t);
+            for (int l1 = 0; l1 < 9; l1++) {
+                int m1 = s->lineMasks[l1];
+                if (__builtin_popcount(m1) != 2) continue;
+                for (int l2 = l1 + 1; l2 < 9; l2++) {
+                    int m2 = s->lineMasks[l2];
+                    if (__builtin_popcount(m2) != 2 || __builtin_popcount(m1 & m2) != 1) continue;
+                    int top1 = SUDOKU_UNITS[t * 9 + l1][__builtin_ctz(m1 & ~m2)];
+                    int top2 = SUDOKU_UNITS[t * 9 + l2][__builtin_ctz(m2 & ~m1)];
+                    if (clearSeeing(s, b, top1, top2, -1)) return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int twoStringKite(Sudoku *s) {
+    for (int d = 1; d <= 9; d++) {
+        int b = sudoku_bit(d);
+        for (int r = 0; r < 9; r++) {
+            int rm = unitMask(s, SUDOKU_UNITS[r], b);
+            if (__builtin_popcount(rm) != 2) continue;
+            int r0 = SUDOKU_UNITS[r][__builtin_ctz(rm)];
+            int r1 = SUDOKU_UNITS[r][__builtin_ctz(rm & (rm - 1))];
+            for (int c = 0; c < 9; c++) {
+                int cm = unitMask(s, SUDOKU_UNITS[9 + c], b);
+                if (__builtin_popcount(cm) != 2) continue;
+                int c0 = SUDOKU_UNITS[9 + c][__builtin_ctz(cm)];
+                int c1 = SUDOKU_UNITS[9 + c][__builtin_ctz(cm & (cm - 1))];
+                if (r0 == c0 || r0 == c1 || r1 == c0 || r1 == c1) continue;
+                for (int i = 0; i < 2; i++) {
+                    int inBox = i == 0 ? r0 : r1;
+                    int rowEnd = i == 0 ? r1 : r0;
+                    for (int j = 0; j < 2; j++) {
+                        int boxMate = j == 0 ? c0 : c1;
+                        int colEnd = j == 0 ? c1 : c0;
+                        if (SUDOKU_BOX[inBox] != SUDOKU_BOX[boxMate]) continue;
+                        if (clearSeeing(s, b, rowEnd, colEnd, -1)) return 1;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int wWing(Sudoku *s) {
+    for (int p = 0; p < 81; p++) {
+        int m = s->lc[p];
+        if (__builtin_popcount(m) != 2) continue;
+        for (int q = p + 1; q < 81; q++) {
+            if (s->lc[q] != m || sudoku_sees(p, q)) continue;
+            for (int rest = m; rest != 0; rest &= rest - 1) {
+                int b = rest & -rest;
+                for (int u = 0; u < 27; u++) {
+                    int um = unitMask(s, SUDOKU_UNITS[u], b);
+                    if (__builtin_popcount(um) != 2) continue;
+                    int e1 = SUDOKU_UNITS[u][__builtin_ctz(um)];
+                    int e2 = SUDOKU_UNITS[u][__builtin_ctz(um & (um - 1))];
+                    if (!(sudoku_sees(e1, p) && sudoku_sees(e2, q)) && !(sudoku_sees(e1, q) && sudoku_sees(e2, p))) continue;
+                    if (clearSeeing(s, m & ~b, p, q, -1)) return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static int uniqueRectangle(Sudoku *s) {
+    int corners[4];
+    for (int r1 = 0; r1 < 9; r1++) {
+        for (int r2 = r1 + 1; r2 < 9; r2++) {
+            int sameBand = r1 / 3 == r2 / 3;
+            for (int c1 = 0; c1 < 9; c1++) {
+                for (int c2 = c1 + 1; c2 < 9; c2++) {
+                    if (sameBand == (c1 / 3 == c2 / 3)) continue;
+                    corners[0] = r1 * 9 + c1;
+                    corners[1] = r1 * 9 + c2;
+                    corners[2] = r2 * 9 + c2;
+                    corners[3] = r2 * 9 + c1;
+                    for (int k = 0; k < 4; k++) {
+                        int target = corners[k];
+                        int m = s->lc[corners[(k + 1) & 3]];
+                        if (__builtin_popcount(m) != 2 || s->lc[corners[(k + 2) & 3]] != m || s->lc[corners[(k + 3) & 3]] != m) continue;
+                        if ((s->lc[target] & m) != m || s->lc[target] == m) continue;
+                        s->lc[target] &= ~m;
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 int sudoku_step(Sudoku *s) {
     if (singles(s)) return 0;
     if (lockedCandidates(s)) return 1;
@@ -480,6 +584,10 @@ int sudoku_step(Sudoku *s) {
     if (yWing(s)) return 4;
     if (fish(s, 3)) return 5;
     if (xyzWing(s)) return 6;
+    if (skyscraper(s)) return 7;
+    if (twoStringKite(s)) return 8;
+    if (wWing(s)) return 9;
+    if (uniqueRectangle(s)) return 10;
     return -1;
 }
 
@@ -495,20 +603,28 @@ int sudoku_rate(Sudoku *s, const int *puzzle) {
     return max;
 }
 
-int sudoku_hint(Sudoku *s, const int *values) {
+int sudoku_hint(Sudoku *s, const int *values, const int *givens) {
     sudoku_load(s, values);
     s->hintTech = 0;
     while (!sudoku_complete(s) && !sudoku_stuck(s)) {
         int t = sudoku_step(s);
-        if (t < 0) return 0;
+        if (t < 0) break;
         if (t == 0) return 1;
         if (t > s->hintTech) s->hintTech = t;
+    }
+    sudoku_load(s, givens);
+    s->hintTech = 0;
+    while (!sudoku_complete(s) && !sudoku_stuck(s)) {
+        int t = sudoku_step(s);
+        if (t < 0) return 0;
+        if (t > s->hintTech) s->hintTech = t;
+        if (t == 0 && values[s->stepCell] == 0) return 1;
     }
     return 0;
 }
 
 void sudoku_generate(Sudoku *s, int level, int *puzzle) {
-    s->allowed = level < 2 ? 0 : level == 2 ? 2 : 6;
+    s->allowed = level < 2 ? 0 : level == 2 ? 2 : 10;
     int minClues = level == 0 ? 38 : 0;
     int full[81];
     for (;;) {
