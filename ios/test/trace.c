@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "../Sudoku.h"
 
@@ -17,6 +18,11 @@ int main(int argc, char **argv) {
     FILE *f = fopen(argv[1], "r");
     if (!f) return 2;
     sudoku_init(&engine, 1);
+    for (char *id = argc > 2 ? argv[2] : ""; *id; ) {
+        engine.techOff[atoi(id)] = 1;
+        while (*id && *id != ',') id++;
+        if (*id == ',') id++;
+    }
     Sudoku *e = &engine;
     char line[256];
     int index = 0;

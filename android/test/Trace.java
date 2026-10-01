@@ -15,6 +15,9 @@ final class Trace {
 
     public static void main(String[] args) throws IOException {
         Sudoku e = new Sudoku(1);
+        if (args.length > 1) {
+            for (String id : args[1].split(",")) if (!id.isEmpty()) e.techOff[Integer.parseInt(id)] = true;
+        }
         StringBuilder out = new StringBuilder();
         int index = 0;
         try (BufferedReader reader = new BufferedReader(new FileReader(args[0]))) {
