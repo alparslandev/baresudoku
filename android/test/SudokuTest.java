@@ -82,8 +82,8 @@ final class SudokuTest {
             int id = Sudoku.TECH_ORDER[k];
             check(!seen[id], "teknik sirasinda tekrar");
             seen[id] = true;
-            if (k < 11) check(id == k, "ilk on bir teknik yerinde degil");
-            if (k > 11) {
+            if (k < 3) check(id == k, "ilk uc teknik yerinde degil");
+            if (k > 3) {
                 int prev = Sudoku.TECH_ORDER[k - 1];
                 check(Sudoku.TECH_BASE[prev] < Sudoku.TECH_BASE[id] || (Sudoku.TECH_BASE[prev] == Sudoku.TECH_BASE[id] && prev < id), "teknik sirasi dereceye gore degil");
             }
