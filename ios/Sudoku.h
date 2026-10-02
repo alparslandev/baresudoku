@@ -15,7 +15,7 @@
 #define SUDOKU_LEVELS 5
 
 typedef struct Sudoku {
-    uint64_t rng;
+    uint32_t rng;
     int work[81];
     int count;
     int limit;
@@ -103,6 +103,7 @@ extern int SUDOKU_UNITS[27][9];
 extern int SUDOKU_PEERS[81][20];
 
 void sudoku_init(Sudoku *s, uint64_t seed);
+void sudoku_seed(Sudoku *s, int seed);
 int sudoku_sees(int a, int b);
 int sudoku_bit(int digit);
 int sudoku_digit(int singleBit);
