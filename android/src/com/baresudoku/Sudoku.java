@@ -52,14 +52,30 @@ final class Sudoku {
         EXPERT_LIMIT = expert;
     }
 
-    final Random random;
+    int rng;
 
     Sudoku() {
-        random = new Random();
+        this(new Random().nextInt());
     }
 
     Sudoku(long seed) {
-        random = new Random(seed);
+        rng = (int) seed;
+    }
+
+    void seed(int s) {
+        rng = s;
+    }
+
+    private long random() {
+        rng += 0x6D2B79F5;
+        int t = rng;
+        t = (t ^ (t >>> 15)) * (t | 1);
+        t ^= t + (t ^ (t >>> 7)) * (t | 61);
+        return (t ^ (t >>> 14)) & 0xFFFFFFFFL;
+    }
+
+    private int nextInt(int bound) {
+        return (int) (random() % bound);
     }
 
     static boolean sees(int a, int b) {
@@ -161,7 +177,7 @@ final class Sudoku {
 
     private void shuffle(int[] a) {
         for (int k = a.length - 1; k > 0; k--) {
-            int j = random.nextInt(k + 1);
+            int j = nextInt(k + 1);
             int t = a[k];
             a[k] = a[j];
             a[j] = t;

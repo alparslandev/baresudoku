@@ -198,6 +198,23 @@ static void stickyTests(Sudoku *e) {
     printf("Rakam once testleri gecti\n");
 }
 
+static int digitsEqual(const int *puzzle, const char *expected) {
+    for (int i = 0; i < 81; i++) if (puzzle[i] != expected[i] - '0') return 0;
+    return 1;
+}
+
+static void seedTests(void) {
+    static Sudoku seeded;
+    int puzzle[81];
+    sudoku_init(&seeded, 162088025);
+    sudoku_generate(&seeded, 1, puzzle);
+    check(digitsEqual(puzzle, "000020006000004700680100009004070068003000900250040100300002087007400000100030000") && seeded.rating == 10, "tohumlu uretim (Orta) beklenen bulmaca degil");
+    sudoku_seed(&seeded, 162088027);
+    sudoku_generate(&seeded, 3, puzzle);
+    check(digitsEqual(puzzle, "300600480000320600091000002000060007009705800500040000900000310003096000018004006") && seeded.rating == 40, "tohumlu uretim (Uzman) beklenen bulmaca degil");
+    printf("Tohumlu uretim testleri gecti\n");
+}
+
 static void registryTests(void) {
     int seen[SUDOKU_TECH_COUNT] = {0};
     for (int k = 0; k < SUDOKU_TECH_COUNT; k++) {
@@ -220,6 +237,7 @@ int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 100;
     sudoku_init(&engine, 20260929);
     registryTests();
+    seedTests();
     for (int level = 0; level < SUDOKU_LEVELS; level++) {
         double start = nowMs();
         int clues = 0;

@@ -10,6 +10,7 @@ final class SudokuTest {
         int n = args.length > 0 ? Integer.parseInt(args[0]) : 100;
         Sudoku engine = new Sudoku(20260929);
         registryTests();
+        seedTests();
         for (int level = 0; level < Sudoku.LEVELS; level++) {
             long start = System.nanoTime();
             int clues = 0;
@@ -74,6 +75,21 @@ final class SudokuTest {
                 return;
             }
         }
+    }
+
+    static String digits(int[] puzzle) {
+        StringBuilder b = new StringBuilder();
+        for (int v : puzzle) b.append(v);
+        return b.toString();
+    }
+
+    static void seedTests() {
+        Sudoku a = new Sudoku();
+        a.seed(162088025);
+        check(digits(a.generate(1)).equals("000020006000004700680100009004070068003000900250040100300002087007400000100030000") && a.rating == 10, "tohumlu uretim (Orta) beklenen bulmaca degil");
+        a.seed(162088027);
+        check(digits(a.generate(3)).equals("300600480000320600091000002000060007009705800500040000900000310003096000018004006") && a.rating == 40, "tohumlu uretim (Uzman) beklenen bulmaca degil");
+        System.out.println("Tohumlu uretim testleri gecti");
     }
 
     static void registryTests() {

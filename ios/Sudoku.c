@@ -66,17 +66,19 @@ void sudoku_init(Sudoku *s, uint64_t seed) {
     initTables();
     memset(s, 0, sizeof(*s));
     s->techLimit = SUDOKU_TECH_COUNT;
-    s->rng = seed ^ 0x9E3779B97F4A7C15ULL;
-    if (s->rng == 0) s->rng = 1;
+    s->rng = (uint32_t)seed;
+}
+
+void sudoku_seed(Sudoku *s, int seed) {
+    s->rng = (uint32_t)seed;
 }
 
 static uint32_t nextRandom(Sudoku *s) {
-    uint64_t x = s->rng;
-    x ^= x >> 12;
-    x ^= x << 25;
-    x ^= x >> 27;
-    s->rng = x;
-    return (uint32_t)((x * 0x2545F4914F6CDD1DULL) >> 32);
+    s->rng += 0x6D2B79F5u;
+    uint32_t t = s->rng;
+    t = (t ^ (t >> 15)) * (t | 1u);
+    t ^= t + (t ^ (t >> 7)) * (t | 61u);
+    return t ^ (t >> 14);
 }
 
 static int nextInt(Sudoku *s, int bound) {
