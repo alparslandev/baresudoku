@@ -871,6 +871,27 @@ final class Sudoku {
         return false;
     }
 
+    static boolean inUnit(int c, int u) {
+        return u < 9 ? ROW[c] == u : u < 18 ? COL[c] == u - 9 : BOX[c] == u - 18;
+    }
+
+    private boolean inTwo(int u, int v) {
+        for (int k = 0; k < 4; k++) if (!inUnit(quad[k], u) && !inUnit(quad[k], v)) return false;
+        return true;
+    }
+
+    private boolean bentQuad() {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                int a = quad[i], b = quad[j];
+                if (inTwo(ROW[a], 9 + COL[b])) return true;
+                if (ROW[a] / 3 == BOX[b] / 3 && inTwo(ROW[a], 18 + BOX[b])) return true;
+                if (COL[a] / 3 == BOX[b] % 3 && inTwo(9 + COL[a], 18 + BOX[b])) return true;
+            }
+        }
+        return false;
+    }
+
     private boolean wingDrop(int union) {
         int z = 0;
         for (int rest = union; rest != 0; rest &= rest - 1) {
@@ -884,7 +905,7 @@ final class Sudoku {
             if (z != 0) return false;
             z = x;
         }
-        if (z == 0) return false;
+        if (z == 0 || !bentQuad()) return false;
         boolean changed = false;
         for (int t = 0; t < 81; t++) {
             if ((lc[t] & z) == 0 || t == quad[0] || t == quad[1] || t == quad[2] || t == quad[3]) continue;

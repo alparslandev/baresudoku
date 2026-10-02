@@ -822,6 +822,27 @@ static int remotePair(Sudoku *s) {
     return 0;
 }
 
+static int inUnit(int c, int u) {
+    return u < 9 ? SUDOKU_ROW[c] == u : u < 18 ? SUDOKU_COL[c] == u - 9 : SUDOKU_BOX[c] == u - 18;
+}
+
+static int inTwo(const Sudoku *s, int u, int v) {
+    for (int k = 0; k < 4; k++) if (!inUnit(s->quad[k], u) && !inUnit(s->quad[k], v)) return 0;
+    return 1;
+}
+
+static int bentQuad(const Sudoku *s) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            int a = s->quad[i], b = s->quad[j];
+            if (inTwo(s, SUDOKU_ROW[a], 9 + SUDOKU_COL[b])) return 1;
+            if (SUDOKU_ROW[a] / 3 == SUDOKU_BOX[b] / 3 && inTwo(s, SUDOKU_ROW[a], 18 + SUDOKU_BOX[b])) return 1;
+            if (SUDOKU_COL[a] / 3 == SUDOKU_BOX[b] % 3 && inTwo(s, 9 + SUDOKU_COL[a], 18 + SUDOKU_BOX[b])) return 1;
+        }
+    }
+    return 0;
+}
+
 static int wingDrop(Sudoku *s, int unionMask) {
     const int *quad = s->quad;
     int z = 0;
@@ -836,7 +857,7 @@ static int wingDrop(Sudoku *s, int unionMask) {
         if (z != 0) return 0;
         z = x;
     }
-    if (z == 0) return 0;
+    if (z == 0 || !bentQuad(s)) return 0;
     int changed = 0;
     for (int t = 0; t < 81; t++) {
         if ((s->lc[t] & z) == 0 || t == quad[0] || t == quad[1] || t == quad[2] || t == quad[3]) continue;
