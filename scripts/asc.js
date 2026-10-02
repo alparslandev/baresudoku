@@ -167,10 +167,19 @@ async function uploadScreenshots(locId, displayTypes, files) {
   }
 }
 
+async function patchIfEditable(path, body, what) {
+  try {
+    await api("PATCH", path, body);
+  } catch (e) {
+    if (!/INVALID_STATE|STATE_ERROR/.test(String(e.message))) throw e;
+    console.log(`${what}: kilitli (inceleme ya da yayinda), atlandi`);
+  }
+}
+
 async function appInfo(app, listing) {
   const infos = (await api("GET", `/apps/${app}/appInfos`)).data;
   const info = infos.find(i => EDITABLE.has(i.attributes.state || i.attributes.appStoreState)) || infos[0];
-  await api("PATCH", `/appInfos/${info.id}`, {
+  await patchIfEditable(`/appInfos/${info.id}`, {
     data: {
       type: "appInfos",
       id: info.id,
@@ -180,16 +189,16 @@ async function appInfo(app, listing) {
         primarySubcategoryTwo: { data: { type: "appCategories", id: "GAMES_BOARD" } },
       },
     },
-  });
+  }, "kategori");
   const infoLocs = (await api("GET", `/appInfos/${info.id}/appInfoLocalizations`)).data;
   for (const [locale, l] of Object.entries(listing.locales)) {
     const attributes = { name: l.name, subtitle: l.subtitle, privacyPolicyUrl: l.privacyPolicyUrl, privacyPolicyText: l.privacyPolicyText };
     const existing = infoLocs.find(x => x.attributes.locale === locale);
-    if (existing) await api("PATCH", `/appInfoLocalizations/${existing.id}`, { data: { type: "appInfoLocalizations", id: existing.id, attributes } });
+    if (existing) await patchIfEditable(`/appInfoLocalizations/${existing.id}`, { data: { type: "appInfoLocalizations", id: existing.id, attributes } }, "ad ve alt baslik " + locale);
     else await api("POST", "/appInfoLocalizations", { data: { type: "appInfoLocalizations", attributes: { locale, ...attributes }, relationships: { appInfo: { data: { type: "appInfos", id: info.id } } } } });
   }
   const age = (await api("GET", `/appInfos/${info.id}/ageRatingDeclaration`)).data;
-  await api("PATCH", `/ageRatingDeclarations/${age.id}`, {
+  await patchIfEditable(`/ageRatingDeclarations/${age.id}`, {
     data: {
       type: "ageRatingDeclarations",
       id: age.id,
@@ -204,7 +213,7 @@ async function appInfo(app, listing) {
         userGeneratedContent: false, ageRatingOverrideV2: "NONE", koreaAgeRatingOverride: "NONE",
       },
     },
-  });
+  }, "yas derecesi");
 }
 
 async function setCopyright(vid, listing) {
