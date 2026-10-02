@@ -1,10 +1,10 @@
 Bare Sudoku, önünde hiçbir engel olmayan sudoku. Reklam yok, hesap yok, takip yok, internet izni yok. Aç ve oyna.
 
-DÖRT SEVİYE
-Kolay, Orta, Zor ve Uzman. Her bulmacanın tam olarak tek çözümü vardır ve yalnızca mantıkla çözülür; tahmin etmen gerekmez.
+BEŞ SEVİYE
+Kolay, Orta, Zor, Uzman ve Usta. Her bulmacanın tam olarak tek çözümü vardır ve yalnızca mantıkla çözülür; tahmin etmen gerekmez. Bulmacanın zorluk derecesi seviye adının yanında gösterilir.
 
 ÖĞRETEN İPUÇLARI
-İpucu doldurabileceğin sonraki hücreyi gösterir ve tekniği söyler: tek aday, satır, sütun veya kutudaki tek yer, kilitli adaylar, çift ve üçlü, X-Wing, Y-Wing, Swordfish veya XYZ-Wing. Tekrar dokun, rakam yerleşsin.
+İpucu doldurabileceğin sonraki hücreyi gösterir ve tekniği söyler: tek aday, satır, sütun veya kutudaki tek yer, kilitli adaylar, çift ve üçlü, X-Wing ve Y-Wing gibi balık ve kanat örüntüleri, Usta seviyesinde zincirler, neredeyse kilitli kümeler ve zorlama ağları. Tekrar dokun, rakam yerleşsin.
 
 HIZLI GİRİŞ
 Önce hücre sonra rakam, ya da rakama iki kez dokunup kilitle ve art arda hücreleri doldur. Not, geri al, sil, tek dokunuşla tüm notlar, kapatılabilir hata işareti; satır, sütun, kutu ve aynı rakam vurguları.
