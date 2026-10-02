@@ -43,9 +43,9 @@ final class Sudoku {
 
     static {
         int n = 0;
-        for (int id = 0; id < 11; id++) TECH_ORDER[n++] = id;
+        for (int id = 0; id < 3; id++) TECH_ORDER[n++] = id;
         for (int r = 0; r < 128; r++) {
-            for (int id = 11; id < TECH_COUNT; id++) if (TECH_BASE[id] == r) TECH_ORDER[n++] = id;
+            for (int id = 3; id < TECH_COUNT; id++) if (TECH_BASE[id] == r) TECH_ORDER[n++] = id;
         }
         int expert = 0;
         for (int id = 0; id < TECH_COUNT; id++) if (TECH_BASE[id] < MASTER_RATING) expert++;

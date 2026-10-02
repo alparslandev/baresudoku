@@ -204,8 +204,8 @@ static void registryTests(void) {
         int id = SUDOKU_TECH_ORDER[k];
         check(!seen[id], "teknik sirasinda tekrar");
         seen[id] = 1;
-        if (k < 11) check(id == k, "ilk on bir teknik yerinde degil");
-        if (k > 11) {
+        if (k < 3) check(id == k, "ilk uc teknik yerinde degil");
+        if (k > 3) {
             int prev = SUDOKU_TECH_ORDER[k - 1];
             check(SUDOKU_TECH_BASE[prev] < SUDOKU_TECH_BASE[id] || (SUDOKU_TECH_BASE[prev] == SUDOKU_TECH_BASE[id] && prev < id), "teknik sirasi dereceye gore degil");
         }

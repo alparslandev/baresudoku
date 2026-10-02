@@ -41,9 +41,9 @@ static void initTables(void) {
         }
     }
     int n = 0;
-    for (int id = 0; id < 11; id++) SUDOKU_TECH_ORDER[n++] = id;
+    for (int id = 0; id < 3; id++) SUDOKU_TECH_ORDER[n++] = id;
     for (int r = 0; r < 128; r++) {
-        for (int id = 11; id < SUDOKU_TECH_COUNT; id++) if (SUDOKU_TECH_BASE[id] == r) SUDOKU_TECH_ORDER[n++] = id;
+        for (int id = 3; id < SUDOKU_TECH_COUNT; id++) if (SUDOKU_TECH_BASE[id] == r) SUDOKU_TECH_ORDER[n++] = id;
     }
     SUDOKU_EXPERT_LIMIT = 0;
     for (int id = 0; id < SUDOKU_TECH_COUNT; id++) if (SUDOKU_TECH_BASE[id] < SUDOKU_MASTER_RATING) SUDOKU_EXPERT_LIMIT++;
