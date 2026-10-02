@@ -34,7 +34,7 @@ final class Sudoku {
         }
     }
 
-    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 86, 84, 85, 90, 95};
+    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95};
     static final int TECH_COUNT = TECH_BASE.length;
     static final int MASTER_RATING = 65;
     static final int LEVELS = 5;
