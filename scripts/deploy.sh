@@ -57,7 +57,10 @@ export_archive() {
     sed 's|<string>upload</string>|<string>export</string>|' ios/ExportOptions.plist > ios/build/export.plist
     OPTIONS=build/export.plist
   fi
-  (cd ios && xcodebuild -exportArchive -archivePath "build/$1.xcarchive" -exportOptionsPlist "$OPTIONS" -exportPath "build/out-$1" -allowProvisioningUpdates $AUTH -quiet)
+  if ! (cd ios && xcodebuild -exportArchive -archivePath "build/$1.xcarchive" -exportOptionsPlist "$OPTIONS" -exportPath "build/out-$1" -allowProvisioningUpdates $AUTH -quiet) && [ -n "$AUTH" ]; then
+    echo "$1: API anahtari ile imza basarisiz (sertifika yok ya da Cloud signing permission error), Xcode'daki Apple Kimligi oturumuyla yeniden deneniyor"
+    (cd ios && xcodebuild -exportArchive -archivePath "build/$1.xcarchive" -exportOptionsPlist "$OPTIONS" -exportPath "build/out-$1" -allowProvisioningUpdates -quiet)
+  fi
 }
 for P in $PLATFORMS; do
   case $P in
