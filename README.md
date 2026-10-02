@@ -8,8 +8,8 @@ Play in the browser at [baresudoku.com](https://baresudoku.com) (separate projec
 
 ## Features
 
-- Four levels (Easy, Medium, Hard, Expert). Every puzzle is solvable by pure logic, no guessing.
-- Notes, undo, erase, fill all notes (tap again to clear them), restart the same puzzle, and hints that explain the reasoning: singles, locked candidates, pairs and triples, X-Wing, Y-Wing, Swordfish, XYZ-Wing.
+- Five levels (Easy, Medium, Hard, Expert, Master). Every puzzle is solvable by pure logic, no guessing; the puzzle's difficulty rating is shown next to the level name.
+- Notes, undo, erase, fill all notes (tap again to clear them), restart the same puzzle, and hints that explain the reasoning and name the technique, from singles, locked candidates, pairs and triples and the fish and wing patterns up to chains, almost locked sets and forcing nets at Master level.
 - Digit-first entry: tap a digit key twice (or once with nothing selected) to lock it, then tap cells to place it. Cell-first entry works as usual.
 - Row, column, box and same-digit highlights, mistake marking (can be turned off), automatic save, dark mode, landscape layout.
 - English and Turkish, following the system language.
