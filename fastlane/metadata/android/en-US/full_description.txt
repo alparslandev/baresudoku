@@ -1,10 +1,10 @@
 Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet permission. Open it and play.
 
-FOUR LEVELS
-Easy, Medium, Hard and Expert. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess.
+FIVE LEVELS
+Easy, Medium, Hard, Expert and Master. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess. The puzzle's difficulty rating is shown next to the level name.
 
 HINTS THAT TEACH
-A hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, X-Wing, Y-Wing, Swordfish or XYZ-Wing. Tap again to place the digit.
+A hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, fish and wing patterns such as X-Wing and Y-Wing, and at Master level chains, almost locked sets and forcing nets. Tap again to place the digit.
 
 FAST INPUT
 Tap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.
