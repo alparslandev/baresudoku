@@ -9,7 +9,7 @@ mkdir -p "$OUT/java"
 javac -encoding UTF-8 -d "$OUT/java" android/src/com/baresudoku/Sudoku.java android/test/Trace.java
 clang -std=c11 -Wall -Wextra -O2 -o "$OUT/trace" ios/Sudoku.c ios/test/trace.c
 CHAINS=27,28,29,30,31,32,33,34,35,36
-for OFF in "" 37 37,38 "$CHAINS,37,38,39" "$CHAINS,37,38,39,40" "14,15,16,17,18,19,20,21,22,24,25,26,$CHAINS"; do
+for OFF in "" 37 37,38 "$CHAINS,37,38,39" "$CHAINS,37,38,39,40" "14,15,16,17,18,19,20,21,22,24,25,26,42,43,44,$CHAINS"; do
   bun scripts/parity.js "$WEB/src/engine.js" "$N" "$OUT/puzzles.txt" "$OFF" > "$OUT/js.txt"
   java -cp "$OUT/java" com.baresudoku.Trace "$OUT/puzzles.txt" "$OFF" > "$OUT/java.txt"
   "$OUT/trace" "$OUT/puzzles.txt" "$OFF" > "$OUT/c.txt"

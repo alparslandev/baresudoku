@@ -34,7 +34,7 @@ final class Sudoku {
         }
     }
 
-    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95};
+    static final int[] TECH_BASE = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95, 48, 53, 58};
     static final int TECH_COUNT = TECH_BASE.length;
     static final int MASTER_RATING = 65;
     static final int LEVELS = 5;
@@ -331,12 +331,12 @@ final class Sudoku {
                     if (mb == 0 || Integer.bitCount(mb) > 3) continue;
                     int m2 = ma | mb;
                     if (Integer.bitCount(m2) == 2) {
-                        changed |= clearOthers(cells, m2, (1 << a) | (1 << b));
+                        changed |= dropOutside(cells, m2, (1 << a) | (1 << b));
                     } else if (Integer.bitCount(m2) == 3) {
                         for (int c = b + 1; c < 9; c++) {
                             int mc = lc[cells[c]];
                             if (mc != 0 && (mc | m2) == m2) {
-                                if (clearOthers(cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(36);
+                                if (dropOutside(cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(36);
                             }
                         }
                     }
@@ -356,12 +356,12 @@ final class Sudoku {
                     if (p2 == 0 || Integer.bitCount(p2) > 3) continue;
                     int u2 = p1 | p2;
                     if (Integer.bitCount(u2) == 2) {
-                        if (keepOnly(cells, u2, bit(d1) | bit(d2))) changed = rated(34);
+                        if (keepInside(cells, u2, bit(d1) | bit(d2))) changed = rated(34);
                     } else if (Integer.bitCount(u2) == 3) {
                         for (int d3 = d2 + 1; d3 <= 9; d3++) {
                             int p3 = positions[d3];
                             if (p3 != 0 && (p3 | u2) == u2) {
-                                if (keepOnly(cells, u2, bit(d1) | bit(d2) | bit(d3))) changed = rated(40);
+                                if (keepInside(cells, u2, bit(d1) | bit(d2) | bit(d3))) changed = rated(40);
                             }
                         }
                     }
@@ -371,27 +371,7 @@ final class Sudoku {
         return changed;
     }
 
-    private boolean clearOthers(int[] cells, int digits, int members) {
-        boolean changed = false;
-        for (int k = 0; k < 9; k++) {
-            if ((members & (1 << k)) == 0 && (lc[cells[k]] & digits) != 0) {
-                lc[cells[k]] &= ~digits;
-                changed = true;
-            }
-        }
-        return changed;
-    }
 
-    private boolean keepOnly(int[] cells, int members, int digits) {
-        boolean changed = false;
-        for (int k = 0; k < 9; k++) {
-            if ((members & (1 << k)) != 0 && (lc[cells[k]] & ~digits) != 0) {
-                lc[cells[k]] &= digits;
-                changed = true;
-            }
-        }
-        return changed;
-    }
 
     private final int[] lineMasks = new int[9];
 
@@ -419,13 +399,13 @@ final class Sudoku {
                         if (m2 == 0 || Integer.bitCount(m2) > size) continue;
                         int u2 = m1 | m2;
                         if (size == 2) {
-                            if (Integer.bitCount(u2) == 2) changed |= fishClear(b, t, u2, (1 << l1) | (1 << l2));
+                            if (Integer.bitCount(u2) == 2) changed |= fishDrop(b, t, u2, (1 << l1) | (1 << l2));
                         } else if (Integer.bitCount(u2) <= 3) {
                             for (int l3 = l2 + 1; l3 < 9; l3++) {
                                 int m3 = lineMasks[l3];
                                 if (m3 == 0 || Integer.bitCount(m3) > 3) continue;
                                 int u3 = u2 | m3;
-                                if (Integer.bitCount(u3) == 3) changed |= fishClear(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
+                                if (Integer.bitCount(u3) == 3) changed |= fishDrop(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
                             }
                         }
                     }
@@ -435,18 +415,6 @@ final class Sudoku {
         return changed;
     }
 
-    private boolean fishClear(int b, int t, int coverMask, int baseMask) {
-        boolean changed = false;
-        for (int c = 0; c < 81; c++) {
-            int base = t == 0 ? ROW[c] : COL[c];
-            int cover = t == 0 ? COL[c] : ROW[c];
-            if ((coverMask & (1 << cover)) != 0 && (baseMask & (1 << base)) == 0 && (lc[c] & b) != 0) {
-                lc[c] &= ~b;
-                changed = true;
-            }
-        }
-        return changed;
-    }
 
     boolean yWing() {
         for (int p = 0; p < 81; p++) {
@@ -584,27 +552,17 @@ final class Sudoku {
     private final int[] corners = new int[4];
 
     boolean uniqueRectangle() {
-        for (int r1 = 0; r1 < 9; r1++) {
-            for (int r2 = r1 + 1; r2 < 9; r2++) {
-                boolean sameBand = r1 / 3 == r2 / 3;
-                for (int c1 = 0; c1 < 9; c1++) {
-                    for (int c2 = c1 + 1; c2 < 9; c2++) {
-                        if (sameBand == (c1 / 3 == c2 / 3)) continue;
-                        corners[0] = r1 * 9 + c1;
-                        corners[1] = r1 * 9 + c2;
-                        corners[2] = r2 * 9 + c2;
-                        corners[3] = r2 * 9 + c1;
-                        for (int k = 0; k < 4; k++) {
-                            int target = corners[k];
-                            int m = lc[corners[(k + 1) & 3]];
-                            if (Integer.bitCount(m) != 2 || lc[corners[(k + 2) & 3]] != m || lc[corners[(k + 3) & 3]] != m) continue;
-                            if ((lc[target] & m) != m || lc[target] == m) continue;
-                            lc[target] &= ~m;
-                            return true;
-                        }
-                    }
-                }
-            }
+        return rectangles(1);
+    }
+
+    private boolean urType1() {
+        for (int k = 0; k < 4; k++) {
+            int target = corners[k];
+            int m = lc[corners[(k + 1) & 3]];
+            if (Integer.bitCount(m) != 2 || lc[corners[(k + 2) & 3]] != m || lc[corners[(k + 3) & 3]] != m) continue;
+            if ((lc[target] & m) != m || lc[target] == m) continue;
+            lc[target] &= ~m;
+            return true;
         }
         return false;
     }
@@ -721,7 +679,7 @@ final class Sudoku {
         return false;
     }
 
-    boolean finnedFish(int n) {
+    boolean finnedFish(int n, boolean sashimi) {
         for (int d = 1; d <= 9; d++) {
             int b = bit(d);
             for (int t = 0; t < 2; t++) {
@@ -737,7 +695,7 @@ final class Sudoku {
                         int inside = all & block;
                         for (int sub = inside; ; sub = (sub - 1) & inside) {
                             int cover = outside | sub;
-                            if (Integer.bitCount(cover) == n && finnedDrop(b, t, base, cover)) return true;
+                            if (Integer.bitCount(cover) == n && finnedDrop(b, t, base, cover, sashimi)) return true;
                             if (sub == 0) break;
                         }
                     }
@@ -747,17 +705,19 @@ final class Sudoku {
         return false;
     }
 
-    private boolean finnedDrop(int b, int t, int base, int cover) {
+    private boolean finnedDrop(int b, int t, int base, int cover, boolean sashimi) {
         int finBox = -1;
+        boolean degenerate = false;
         for (int l = 0; l < 9; l++) {
             if ((base & (1 << l)) == 0) continue;
+            if (Integer.bitCount(lineMasks[l] & cover) < 2) degenerate = true;
             int fins = lineMasks[l] & ~cover;
             if (fins == 0) continue;
             int box = BOX[UNITS[t * 9 + l][Integer.numberOfTrailingZeros(fins)]];
             if (finBox >= 0 && box != finBox) return false;
             finBox = box;
         }
-        if (finBox < 0) return false;
+        if (finBox < 0 || degenerate != sashimi) return false;
         boolean changed = false;
         for (int k = 0; k < 9; k++) {
             if ((cover & (1 << k)) == 0) continue;
@@ -937,6 +897,7 @@ final class Sudoku {
 
     private boolean rectangle(int kind) {
         switch (kind) {
+            case 1: return urType1();
             case 2: return urExtra(false);
             case 3: return urType3();
             case 4: return urType4();
@@ -1660,7 +1621,7 @@ final class Sudoku {
                 for (int q = p + 1; q < alsLinkStart[c + 1]; q++) {
                     int b = alsLinkTo[q];
                     int common = alsDigits[a] & alsDigits[b];
-                    if (common == 0 || alsOverlap(a, b)) continue;
+                    if (common == 0) continue;
                     for (int xs = alsLinkMask[p]; xs != 0; xs &= xs - 1) {
                         int x = xs & -xs;
                         for (int ys = alsLinkMask[q] & ~x; ys != 0; ys &= ys - 1) {
@@ -2111,9 +2072,9 @@ final class Sudoku {
             case 11: return nakedQuad();
             case 12: return hiddenQuad();
             case 13: return jellyfish();
-            case 14: return finnedFish(2);
-            case 15: return finnedFish(3);
-            case 16: return finnedFish(4);
+            case 14: return finnedFish(2, false);
+            case 15: return finnedFish(3, false);
+            case 16: return finnedFish(4, false);
             case 17: return emptyRectangle();
             case 18: return remotePair();
             case 19: return wxyzWing();
@@ -2139,6 +2100,9 @@ final class Sudoku {
             case 39: return unitForcing();
             case 40: return dynamicNet();
             case 41: return nestedNet();
+            case 42: return finnedFish(2, true);
+            case 43: return finnedFish(3, true);
+            case 44: return finnedFish(4, true);
         }
         return false;
     }
