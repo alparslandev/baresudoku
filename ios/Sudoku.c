@@ -6,7 +6,7 @@ int SUDOKU_COL[81];
 int SUDOKU_BOX[81];
 int SUDOKU_UNITS[27][9];
 int SUDOKU_PEERS[81][20];
-const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95};
+const int SUDOKU_TECH_BASE[SUDOKU_TECH_COUNT] = {10, 26, 30, 32, 42, 38, 44, 40, 41, 44, 45, 50, 54, 52, 46, 50, 56, 46, 47, 55, 46, 48, 47, 47, 48, 48, 56, 65, 66, 68, 70, 73, 70, 75, 78, 80, 82, 84, 85, 86, 90, 95, 48, 53, 58};
 int SUDOKU_TECH_ORDER[SUDOKU_TECH_COUNT];
 int SUDOKU_EXPERT_LIMIT;
 static unsigned char SEE[6561];
@@ -323,25 +323,15 @@ static int lockedCandidates(Sudoku *s) {
     return changed;
 }
 
-static int clearOthers(Sudoku *s, const int *cells, int digits, int members) {
+static int dropOutside(Sudoku *s, const int *cells, int digits, int members) {
     int changed = 0;
-    for (int k = 0; k < 9; k++) {
-        if ((members & (1 << k)) == 0 && (s->lc[cells[k]] & digits) != 0) {
-            s->lc[cells[k]] &= ~digits;
-            changed = 1;
-        }
-    }
+    for (int k = 0; k < 9; k++) if ((members & (1 << k)) == 0 && drop(s, cells[k], digits)) changed = 1;
     return changed;
 }
 
-static int keepOnly(Sudoku *s, const int *cells, int members, int digits) {
+static int keepInside(Sudoku *s, const int *cells, int members, int digits) {
     int changed = 0;
-    for (int k = 0; k < 9; k++) {
-        if ((members & (1 << k)) != 0 && (s->lc[cells[k]] & ~digits) != 0) {
-            s->lc[cells[k]] &= digits;
-            changed = 1;
-        }
-    }
+    for (int k = 0; k < 9; k++) if ((members & (1 << k)) != 0 && drop(s, cells[k], SUDOKU_ALL & ~digits)) changed = 1;
     return changed;
 }
 
@@ -357,12 +347,12 @@ static int subsets(Sudoku *s) {
                 if (mb == 0 || __builtin_popcount(mb) > 3) continue;
                 int m2 = ma | mb;
                 if (__builtin_popcount(m2) == 2) {
-                    changed |= clearOthers(s, cells, m2, (1 << a) | (1 << b));
+                    changed |= dropOutside(s, cells, m2, (1 << a) | (1 << b));
                 } else if (__builtin_popcount(m2) == 3) {
                     for (int c = b + 1; c < 9; c++) {
                         int mc = s->lc[cells[c]];
                         if (mc != 0 && (mc | m2) == m2) {
-                            if (clearOthers(s, cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(s, 36);
+                            if (dropOutside(s, cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(s, 36);
                         }
                     }
                 }
@@ -382,12 +372,12 @@ static int subsets(Sudoku *s) {
                 if (p2 == 0 || __builtin_popcount(p2) > 3) continue;
                 int u2 = p1 | p2;
                 if (__builtin_popcount(u2) == 2) {
-                    if (keepOnly(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2))) changed = rated(s, 34);
+                    if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2))) changed = rated(s, 34);
                 } else if (__builtin_popcount(u2) == 3) {
                     for (int d3 = d2 + 1; d3 <= 9; d3++) {
                         int p3 = s->positions[d3];
                         if (p3 != 0 && (p3 | u2) == u2) {
-                            if (keepOnly(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3))) changed = rated(s, 40);
+                            if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3))) changed = rated(s, 40);
                         }
                     }
                 }
@@ -397,15 +387,11 @@ static int subsets(Sudoku *s) {
     return changed;
 }
 
-static int fishClear(Sudoku *s, int b, int t, int coverMask, int baseMask) {
+static int fishDrop(Sudoku *s, int b, int t, int cover, int base) {
     int changed = 0;
-    for (int c = 0; c < 81; c++) {
-        int base = t == 0 ? SUDOKU_ROW[c] : SUDOKU_COL[c];
-        int cover = t == 0 ? SUDOKU_COL[c] : SUDOKU_ROW[c];
-        if ((coverMask & (1 << cover)) != 0 && (baseMask & (1 << base)) == 0 && (s->lc[c] & b) != 0) {
-            s->lc[c] &= ~b;
-            changed = 1;
-        }
+    for (int k = 0; k < 9; k++) {
+        if ((cover & (1 << k)) == 0) continue;
+        for (int l = 0; l < 9; l++) if ((base & (1 << l)) == 0 && drop(s, SUDOKU_UNITS[t * 9 + l][k], b)) changed = 1;
     }
     return changed;
 }
@@ -434,13 +420,13 @@ static int fish(Sudoku *s, int size) {
                     if (m2 == 0 || __builtin_popcount(m2) > size) continue;
                     int u2 = m1 | m2;
                     if (size == 2) {
-                        if (__builtin_popcount(u2) == 2) changed |= fishClear(s, b, t, u2, (1 << l1) | (1 << l2));
+                        if (__builtin_popcount(u2) == 2) changed |= fishDrop(s, b, t, u2, (1 << l1) | (1 << l2));
                     } else if (__builtin_popcount(u2) <= 3) {
                         for (int l3 = l2 + 1; l3 < 9; l3++) {
                             int m3 = s->lineMasks[l3];
                             if (m3 == 0 || __builtin_popcount(m3) > 3) continue;
                             int u3 = u2 | m3;
-                            if (__builtin_popcount(u3) == 3) changed |= fishClear(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
+                            if (__builtin_popcount(u3) == 3) changed |= fishDrop(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
                         }
                     }
                 }
@@ -575,44 +561,8 @@ static int wWing(Sudoku *s) {
     return 0;
 }
 
-static int uniqueRectangle(Sudoku *s) {
-    int corners[4];
-    for (int r1 = 0; r1 < 9; r1++) {
-        for (int r2 = r1 + 1; r2 < 9; r2++) {
-            int sameBand = r1 / 3 == r2 / 3;
-            for (int c1 = 0; c1 < 9; c1++) {
-                for (int c2 = c1 + 1; c2 < 9; c2++) {
-                    if (sameBand == (c1 / 3 == c2 / 3)) continue;
-                    corners[0] = r1 * 9 + c1;
-                    corners[1] = r1 * 9 + c2;
-                    corners[2] = r2 * 9 + c2;
-                    corners[3] = r2 * 9 + c1;
-                    for (int k = 0; k < 4; k++) {
-                        int target = corners[k];
-                        int m = s->lc[corners[(k + 1) & 3]];
-                        if (__builtin_popcount(m) != 2 || s->lc[corners[(k + 2) & 3]] != m || s->lc[corners[(k + 3) & 3]] != m) continue;
-                        if ((s->lc[target] & m) != m || s->lc[target] == m) continue;
-                        s->lc[target] &= ~m;
-                        return 1;
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
 
-static int dropOutside(Sudoku *s, const int *cells, int digits, int members) {
-    int changed = 0;
-    for (int k = 0; k < 9; k++) if ((members & (1 << k)) == 0 && drop(s, cells[k], digits)) changed = 1;
-    return changed;
-}
 
-static int keepInside(Sudoku *s, const int *cells, int members, int digits) {
-    int changed = 0;
-    for (int k = 0; k < 9; k++) if ((members & (1 << k)) != 0 && drop(s, cells[k], SUDOKU_ALL & ~digits)) changed = 1;
-    return changed;
-}
 
 static int nakedQuad(Sudoku *s) {
     for (int u = 0; u < 27; u++) {
@@ -679,14 +629,6 @@ static int baseUnion(const Sudoku *s, int base) {
     return all;
 }
 
-static int fishDrop(Sudoku *s, int b, int t, int cover, int base) {
-    int changed = 0;
-    for (int k = 0; k < 9; k++) {
-        if ((cover & (1 << k)) == 0) continue;
-        for (int l = 0; l < 9; l++) if ((base & (1 << l)) == 0 && drop(s, SUDOKU_UNITS[t * 9 + l][k], b)) changed = 1;
-    }
-    return changed;
-}
 
 static int jellyfish(Sudoku *s) {
     for (int d = 1; d <= 9; d++) {
@@ -703,17 +645,19 @@ static int jellyfish(Sudoku *s) {
     return 0;
 }
 
-static int finnedDrop(Sudoku *s, int b, int t, int base, int cover) {
+static int finnedDrop(Sudoku *s, int b, int t, int base, int cover, int sashimi) {
     int finBox = -1;
+    int degenerate = 0;
     for (int l = 0; l < 9; l++) {
         if ((base & (1 << l)) == 0) continue;
+        if (__builtin_popcount(s->lineMasks[l] & cover) < 2) degenerate = 1;
         int fins = s->lineMasks[l] & ~cover;
         if (fins == 0) continue;
         int box = SUDOKU_BOX[SUDOKU_UNITS[t * 9 + l][__builtin_ctz(fins)]];
         if (finBox >= 0 && box != finBox) return 0;
         finBox = box;
     }
-    if (finBox < 0) return 0;
+    if (finBox < 0 || degenerate != sashimi) return 0;
     int changed = 0;
     for (int k = 0; k < 9; k++) {
         if ((cover & (1 << k)) == 0) continue;
@@ -726,7 +670,7 @@ static int finnedDrop(Sudoku *s, int b, int t, int base, int cover) {
     return changed;
 }
 
-static int finnedFish(Sudoku *s, int n) {
+static int finnedFish(Sudoku *s, int n, int sashimi) {
     for (int d = 1; d <= 9; d++) {
         int b = sudoku_bit(d);
         for (int t = 0; t < 2; t++) {
@@ -742,7 +686,7 @@ static int finnedFish(Sudoku *s, int n) {
                     int inside = all & block;
                     for (int sub = inside; ; sub = (sub - 1) & inside) {
                         int cover = outside | sub;
-                        if (__builtin_popcount(cover) == n && finnedDrop(s, b, t, base, cover)) return 1;
+                        if (__builtin_popcount(cover) == n && finnedDrop(s, b, t, base, cover, sashimi)) return 1;
                         if (sub == 0) break;
                     }
                 }
@@ -1035,8 +979,22 @@ static int hiddenRectangle(Sudoku *s) {
     return 0;
 }
 
+static int urType1(Sudoku *s) {
+    const int *corners = s->corners;
+    for (int k = 0; k < 4; k++) {
+        int target = corners[k];
+        int m = s->lc[corners[(k + 1) & 3]];
+        if (__builtin_popcount(m) != 2 || s->lc[corners[(k + 2) & 3]] != m || s->lc[corners[(k + 3) & 3]] != m) continue;
+        if ((s->lc[target] & m) != m || s->lc[target] == m) continue;
+        s->lc[target] &= ~m;
+        return 1;
+    }
+    return 0;
+}
+
 static int rectangle(Sudoku *s, int kind) {
     switch (kind) {
+        case 1: return urType1(s);
         case 2: return urExtra(s, 0);
         case 3: return urType3(s);
         case 4: return urType4(s);
@@ -1063,6 +1021,10 @@ static int rectangles(Sudoku *s, int kind) {
         }
     }
     return 0;
+}
+
+static int uniqueRectangle(Sudoku *s) {
+    return rectangles(s, 1);
 }
 
 static int bugPlusOne(Sudoku *s) {
@@ -1595,7 +1557,7 @@ static int alsXyWing(Sudoku *s) {
             for (int q = p + 1; q < s->alsLinkStart[c + 1]; q++) {
                 int b = s->alsLinkTo[q];
                 int common = s->alsDigits[a] & s->alsDigits[b];
-                if (common == 0 || alsOverlap(s, a, b)) continue;
+                if (common == 0) continue;
                 for (int xs = s->alsLinkMask[p]; xs != 0; xs &= xs - 1) {
                     int x = xs & -xs;
                     for (int ys = s->alsLinkMask[q] & ~x; ys != 0; ys &= ys - 1) {
@@ -2030,9 +1992,9 @@ static int apply(Sudoku *s, int id) {
         case 11: return nakedQuad(s);
         case 12: return hiddenQuad(s);
         case 13: return jellyfish(s);
-        case 14: return finnedFish(s, 2);
-        case 15: return finnedFish(s, 3);
-        case 16: return finnedFish(s, 4);
+        case 14: return finnedFish(s, 2, 0);
+        case 15: return finnedFish(s, 3, 0);
+        case 16: return finnedFish(s, 4, 0);
         case 17: return emptyRectangle(s);
         case 18: return remotePair(s);
         case 19: return wxyzWing(s);
@@ -2058,6 +2020,9 @@ static int apply(Sudoku *s, int id) {
         case 39: return unitForcing(s);
         case 40: return dynamicNet(s);
         case 41: return nestedNet(s);
+        case 42: return finnedFish(s, 2, 1);
+        case 43: return finnedFish(s, 3, 1);
+        case 44: return finnedFish(s, 4, 1);
     }
     return 0;
 }
