@@ -28,7 +28,7 @@ final class BoardNodes extends AccessibilityNodeProvider {
         node.setParent(view);
         node.setVisibleToUser(true);
         node.setContentDescription(view.axLabel(id));
-        boolean clickable = id < 400 ? id != 301 && id != 302 : id < 410;
+        boolean clickable = view.axClickable(id);
         node.setClickable(clickable);
         if (clickable) node.addAction(AccessibilityNodeInfo.ACTION_CLICK);
         node.setEnabled(view.axEnabled(id));
