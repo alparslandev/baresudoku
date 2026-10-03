@@ -142,6 +142,71 @@ static void gameTests(Sudoku *e) {
     printf("Oyun durumu testleri gecti\n");
 }
 
+static void cornerTests(Sudoku *e) {
+    int puzzle[81];
+    sudoku_generate(e, 1, puzzle);
+    Game g;
+    game_init(&g);
+    game_start(&g, puzzle, e->solution, 1);
+    int cell = firstEmpty(puzzle);
+    int d = e->solution[cell];
+    int peer = -1;
+    for (int k = 0; k < 20 && peer < 0; k++) if (puzzle[SUDOKU_PEERS[cell][k]] == 0) peer = SUDOKU_PEERS[cell][k];
+    game_cycle_notes(&g);
+    game_cycle_notes(&g);
+    check(g.noteMode && g.cornerMode, "not dongusu koseye gelmedi");
+    game_select(&g, peer);
+    check(game_enter(&g, d) && g.corner[peer] == sudoku_bit(d) && g.notes[peer] == 0, "kose notu yazilmadi");
+    game_cycle_notes(&g);
+    check(!g.noteMode && !g.cornerMode, "not dongusu kapanmadi");
+    game_select(&g, cell);
+    check(game_enter(&g, d) && g.corner[peer] == 0, "yerlestirince kose notu eslerden silinmedi");
+    check(game_undo(&g) && g.value[cell] == 0 && g.corner[peer] == sudoku_bit(d), "geri al kose notunu donmedi");
+    game_select(&g, peer);
+    check(game_erase(&g) && g.corner[peer] == 0, "sil kose notunu silmedi");
+    check(game_undo(&g) && g.corner[peer] == sudoku_bit(d), "silmeyi geri al kose notunu donmedi");
+    check(game_paint(&g, 3) && g.color[peer] == 3 && game_paint(&g, 3) && g.color[peer] == 0, "boya acilip kapanmadi");
+    check(game_paint(&g, 5), "boya calismadi");
+    char *saved = game_encode(&g, 0);
+    Game h;
+    game_init(&h);
+    check(game_decode(&h, saved), "yeni kayit okunmadi");
+    check(memcmp(h.corner, g.corner, sizeof(g.corner)) == 0 && memcmp(h.color, g.color, sizeof(g.color)) == 0, "kose ve renk kayittan donmedi");
+    check(h.histCount == g.histCount && h.histLen == g.histLen && memcmp(h.hist, g.hist, sizeof(int) * (size_t)g.histLen) == 0, "gecmis kayittan farkli dondu");
+    char *copy = strdup(saved);
+    char *fields[4096];
+    int nf = 0;
+    char *cur = copy, *tok;
+    while ((tok = strsep(&cur, "|")) != NULL && nf < 4096) fields[nf++] = tok;
+    int count = atoi(fields[11]);
+    char *old = malloc(strlen(saved) + 1);
+    char *w = old;
+    for (int k = 0; k < 12; k++) w += sprintf(w, "%s%s", k ? "|" : "", fields[k]);
+    for (int k = 0; k < count; k++) {
+        int values[324];
+        int len = 0;
+        char *rec = fields[12 + k], *part;
+        while ((part = strsep(&rec, ",")) != NULL) values[len++] = atoi(part);
+        *w++ = '|';
+        for (int i = 0; i < len; i += 4) w += sprintf(w, "%s%d,%d,%d", i ? "," : "", values[i], values[i + 1], values[i + 2]);
+    }
+    *w = 0;
+    Game k2;
+    game_init(&k2);
+    check(game_decode(&k2, old) && k2.histCount == count, "eski kayit okunmadi");
+    for (int i = 0; i < 81; i++) check(k2.corner[i] == 0 && k2.color[i] == 0, "eski kayitta kose ya da renk dolu");
+    check(k2.histLen % 4 == 0, "eski kayit gecmisi dortlu degil");
+    game_free(&k2);
+    free(old);
+    free(copy);
+    game_free(&h);
+    free(saved);
+    game_restart(&g);
+    for (int i = 0; i < 81; i++) check(g.corner[i] == 0 && g.color[i] == 0, "bastan basla kose ve rengi silmedi");
+    game_free(&g);
+    printf("Kose notu ve renk testleri gecti\n");
+}
+
 static void stickyTests(Sudoku *e) {
     int puzzle[81];
     sudoku_generate(e, 0, puzzle);
@@ -266,6 +331,7 @@ int main(int argc, char **argv) {
     }
     gameTests(&engine);
     stickyTests(&engine);
+    cornerTests(&engine);
     printf("%s\n", failures == 0 ? "TAMAM" : "HATA");
     return failures == 0 ? 0 : 1;
 }

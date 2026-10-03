@@ -27,9 +27,12 @@ static void clearHistory(Game *g) {
 void game_restart(Game *g) {
     memcpy(g->value, g->given, sizeof(g->value));
     memset(g->notes, 0, sizeof(g->notes));
+    memset(g->corner, 0, sizeof(g->corner));
+    memset(g->color, 0, sizeof(g->color));
     clearHistory(g);
     g->solved = 0;
     g->noteMode = 0;
+    g->cornerMode = 0;
     g->selected = GAME_NONE;
     g->sticky = 0;
     g->elapsed = 0;
@@ -55,10 +58,11 @@ void game_select(Game *g, int cell) {
 }
 
 static void touch(Game *g, int cell) {
-    for (int i = 0; i < g->recordLength; i += 3) if (g->record[i] == cell) return;
+    for (int i = 0; i < g->recordLength; i += 4) if (g->record[i] == cell) return;
     g->record[g->recordLength++] = cell;
     g->record[g->recordLength++] = g->value[cell];
     g->record[g->recordLength++] = g->notes[cell];
+    g->record[g->recordLength++] = g->corner[cell];
 }
 
 static void pushRecord(Game *g, const int *values, int n) {
@@ -101,7 +105,8 @@ int game_enter(Game *g, int d) {
     if (g->noteMode) {
         if (g->value[c] != 0) return 0;
         touch(g, c);
-        g->notes[c] ^= sudoku_bit(d);
+        if (g->cornerMode) g->corner[c] ^= sudoku_bit(d);
+        else g->notes[c] ^= sudoku_bit(d);
         return commit(g);
     }
     touch(g, c);
@@ -111,12 +116,14 @@ int game_enter(Game *g, int d) {
     }
     g->value[c] = d;
     g->notes[c] = 0;
+    g->corner[c] = 0;
     int b = sudoku_bit(d);
     for (int k = 0; k < 20; k++) {
         int p = SUDOKU_PEERS[c][k];
-        if ((g->notes[p] & b) != 0) {
+        if (((g->notes[p] | g->corner[p]) & b) != 0) {
             touch(g, p);
             g->notes[p] &= ~b;
+            g->corner[p] &= ~b;
         }
     }
     commit(g);
@@ -145,11 +152,27 @@ int game_tap(Game *g, int cell) {
 }
 
 int game_erase(Game *g) {
-    if (!game_can_edit(g) || (g->value[g->selected] == 0 && g->notes[g->selected] == 0)) return 0;
+    if (!game_can_edit(g) || (g->value[g->selected] == 0 && g->notes[g->selected] == 0 && g->corner[g->selected] == 0)) return 0;
     touch(g, g->selected);
     g->value[g->selected] = 0;
     g->notes[g->selected] = 0;
+    g->corner[g->selected] = 0;
     return commit(g);
+}
+
+void game_cycle_notes(Game *g) {
+    if (!g->noteMode) g->noteMode = 1;
+    else if (!g->cornerMode) g->cornerMode = 1;
+    else {
+        g->noteMode = 0;
+        g->cornerMode = 0;
+    }
+}
+
+int game_paint(Game *g, int k) {
+    if (!g->active || g->solved || g->selected < 0) return 0;
+    g->color[g->selected] = g->color[g->selected] == k ? 0 : k;
+    return 1;
 }
 
 int game_conflict(const Game *g, int cell) {
@@ -186,9 +209,10 @@ int game_undo(Game *g) {
     int start = g->recStart[g->histCount - 1];
     const int *r = g->hist + start;
     int n = g->histLen - start;
-    for (int i = 0; i < n; i += 3) {
+    for (int i = 0; i < n; i += 4) {
         g->value[r[i]] = r[i + 1];
         g->notes[r[i]] = r[i + 2];
+        g->corner[r[i]] = r[i + 3];
     }
     if (g->sticky == 0) g->selected = r[0];
     g->histLen = start;
@@ -225,6 +249,7 @@ int game_hint(Game *g, Sudoku *engine) {
     g->sticky = 0;
     if (game_hint_active(g) && g->hintKind == HINT_PLACE && g->value[g->hintCell] == 0) {
         g->noteMode = 0;
+        g->cornerMode = 0;
         g->hintKind = HINT_NONE;
         return game_enter(g, g->hintDigit);
     }
@@ -253,8 +278,17 @@ static void appendDigits(char **p, const int *a) {
     for (int i = 0; i < 81; i++) *(*p)++ = (char)('0' + a[i]);
 }
 
+static void appendMasks(char **p, const int *masks) {
+    for (int i = 0; i < 81; i++) {
+        int m = masks[i];
+        *(*p)++ = (char)('0' + (m >> 6));
+        *(*p)++ = (char)('0' + ((m >> 3) & 7));
+        *(*p)++ = (char)('0' + (m & 7));
+    }
+}
+
 char *game_encode(const Game *g, int64_t now) {
-    size_t cap = 800 + (size_t)g->histLen * 5 + (size_t)g->histCount * 2;
+    size_t cap = 1200 + (size_t)g->histLen * 5 + (size_t)g->histCount * 2;
     char *out = malloc(cap);
     char *p = out;
     p += sprintf(p, "%d|%d|%d|%d|%d|%d|%lld|", g->active ? 1 : 0, g->level, g->solved ? 1 : 0,
@@ -265,12 +299,7 @@ char *game_encode(const Game *g, int64_t now) {
     *p++ = '|';
     appendDigits(&p, g->value);
     *p++ = '|';
-    for (int i = 0; i < 81; i++) {
-        int m = g->notes[i];
-        *p++ = (char)('0' + (m >> 6));
-        *p++ = (char)('0' + ((m >> 3) & 7));
-        *p++ = (char)('0' + (m & 7));
-    }
+    appendMasks(&p, g->notes);
     p += sprintf(p, "|%d", g->histCount);
     for (int r = 0; r < g->histCount; r++) {
         int start = g->recStart[r];
@@ -281,8 +310,27 @@ char *game_encode(const Game *g, int64_t now) {
             p += sprintf(p, "%d", g->hist[i]);
         }
     }
+    *p++ = '|';
+    appendMasks(&p, g->corner);
+    *p++ = '|';
+    appendDigits(&p, g->color);
+    p += sprintf(p, "|%d", g->cornerMode ? 1 : 0);
     *p = 0;
     return out;
+}
+
+static int readMasks(const char *s, int *masks) {
+    if (strlen(s) != 243) return 0;
+    for (int i = 0; i < 81; i++) {
+        int m = 0;
+        for (int k = 0; k < 3; k++) {
+            int o = s[i * 3 + k] - '0';
+            if (o < 0 || o > 7) return 0;
+            m = (m << 3) | o;
+        }
+        masks[i] = m;
+    }
+    return 1;
 }
 
 static int parseInt(const char *s, int *out) {
@@ -332,39 +380,49 @@ int game_decode(Game *g, const char *text) {
     }
     if (lvl < 0 || lvl >= SUDOKU_LEVELS || sel < GAME_NONE || sel > 80 || time < 0) goto done;
     if (!readDigits(f[7], g->given) || !readDigits(f[8], g->solution) || !readDigits(f[9], g->value)) goto done;
-    if (strlen(f[10]) != 243) goto done;
-    for (int i = 0; i < 81; i++) {
-        int m = 0;
-        for (int k = 0; k < 3; k++) {
-            int o = f[10][i * 3 + k] - '0';
-            if (o < 0 || o > 7) goto done;
-            m = (m << 3) | o;
-        }
-        g->notes[i] = m;
-    }
-    if (!parseInt(f[11], &count) || count < 0 || n != 12 + count) goto done;
+    if (!readMasks(f[10], g->notes)) goto done;
+    if (!parseInt(f[11], &count) || count < 0) goto done;
+    int extended = n == 15 + count;
+    if (!extended && n != 12 + count) goto done;
+    int width = extended ? 4 : 3;
     clearHistory(g);
     for (int k = 0; k < count; k++) {
-        int values[243];
+        int values[324];
+        int quads[324];
         int len = 0;
         char *rec = f[12 + k];
         char *part;
         while ((part = strsep(&rec, ",")) != NULL) {
             int v;
-            if (len >= 243 || !parseInt(part, &v)) goto done;
+            if (len >= 324 || !parseInt(part, &v)) goto done;
             values[len++] = v;
         }
-        if (len == 0 || len % 3 != 0) goto done;
-        for (int i = 0; i < len; i += 3) {
-            if (values[i] < 0 || values[i] > 80 || values[i + 1] < 0 || values[i + 1] > 9 || values[i + 2] < 0 || values[i + 2] > SUDOKU_ALL) goto done;
+        if (len == 0 || len % width != 0) goto done;
+        int qlen = 0;
+        for (int i = 0; i < len; i += width) {
+            int cornerMask = extended ? values[i + 3] : 0;
+            if (values[i] < 0 || values[i] > 80 || values[i + 1] < 0 || values[i + 1] > 9 || values[i + 2] < 0 || values[i + 2] > SUDOKU_ALL || cornerMask < 0 || cornerMask > SUDOKU_ALL || qlen + 4 > 324) goto done;
+            quads[qlen++] = values[i];
+            quads[qlen++] = values[i + 1];
+            quads[qlen++] = values[i + 2];
+            quads[qlen++] = cornerMask;
         }
-        pushRecord(g, values, len);
+        pushRecord(g, quads, qlen);
+    }
+    memset(g->corner, 0, sizeof(g->corner));
+    memset(g->color, 0, sizeof(g->color));
+    g->cornerMode = 0;
+    if (extended) {
+        if (!readMasks(f[12 + count], g->corner) || !readDigits(f[13 + count], g->color)) goto done;
+        for (int i = 0; i < 81; i++) if (g->color[i] > GAME_COLORS) goto done;
+        g->cornerMode = strcmp(f[14 + count], "1") == 0;
     }
     g->recordLength = 0;
     g->level = lvl;
     g->rating = 0;
     g->solved = strcmp(f[2], "1") == 0;
     g->noteMode = strcmp(f[4], "1") == 0;
+    g->cornerMode = g->noteMode && g->cornerMode;
     g->selected = sel;
     g->sticky = 0;
     g->elapsed = time;

@@ -36,6 +36,7 @@ final class SudokuTest {
         }
         gameTests(engine);
         stickyTests(engine);
+        cornerTests(engine);
         System.out.println(failures == 0 ? "TAMAM" : "HATA: " + failures);
         if (failures != 0) System.exit(1);
     }
@@ -175,6 +176,53 @@ final class SudokuTest {
         g.select(cell);
         check(g.enter(right) && g.value[cell] == right, "bastan baslatilan oyunda hamle yapilamadi");
         System.out.println("Oyun durumu testleri gecti");
+    }
+
+    static void cornerTests(Sudoku e) {
+        int[] puzzle = e.generate(1);
+        Game g = new Game();
+        g.start(puzzle, e.solution, 1);
+        int cell = firstEmpty(puzzle);
+        int d = e.solution[cell];
+        int peer = -1;
+        for (int p : Sudoku.PEERS[cell]) if (puzzle[p] == 0) { peer = p; break; }
+        g.cycleNotes();
+        g.cycleNotes();
+        check(g.noteMode && g.cornerMode, "not dongusu koseye gelmedi");
+        g.select(peer);
+        check(g.enter(d) && g.corner[peer] == Sudoku.bit(d) && g.notes[peer] == 0, "kose notu yazilmadi");
+        g.cycleNotes();
+        check(!g.noteMode && !g.cornerMode, "not dongusu kapanmadi");
+        g.select(cell);
+        check(g.enter(d) && g.corner[peer] == 0, "yerlestirince kose notu eslerden silinmedi");
+        check(g.undo() && g.value[cell] == 0 && g.corner[peer] == Sudoku.bit(d), "geri al kose notunu donmedi");
+        g.select(peer);
+        check(g.erase() && g.corner[peer] == 0, "sil kose notunu silmedi");
+        check(g.undo() && g.corner[peer] == Sudoku.bit(d), "silmeyi geri al kose notunu donmedi");
+        check(g.paint(3) && g.color[peer] == 3 && g.paint(3) && g.color[peer] == 0, "boya acilip kapanmadi");
+        check(g.paint(5), "boya calismadi");
+        String saved = g.encode(0);
+        Game h = new Game();
+        check(h.decode(saved), "yeni kayit okunmadi");
+        check(Arrays.equals(h.corner, g.corner) && Arrays.equals(h.color, g.color) && h.history.size() == g.history.size(), "kose ve renk kayittan donmedi");
+        for (int k = 0; k < g.history.size(); k++) check(Arrays.equals(h.history.get(k), g.history.get(k)), "gecmis kayittan farkli dondu");
+        String[] f = saved.split("\\|", -1);
+        int n = Integer.parseInt(f[11]);
+        StringBuilder old = new StringBuilder();
+        for (int k = 0; k < 12; k++) old.append(k > 0 ? "|" : "").append(f[k]);
+        for (int k = 0; k < n; k++) {
+            String[] parts = f[12 + k].split(",");
+            StringBuilder r = new StringBuilder();
+            for (int i = 0; i < parts.length; i += 4) r.append(i > 0 ? "," : "").append(parts[i]).append(',').append(parts[i + 1]).append(',').append(parts[i + 2]);
+            old.append('|').append(r);
+        }
+        Game k2 = new Game();
+        check(k2.decode(old.toString()) && k2.history.size() == n, "eski kayit okunmadi");
+        for (int i = 0; i < 81; i++) check(k2.corner[i] == 0 && k2.color[i] == 0, "eski kayitta kose ya da renk dolu");
+        for (int[] r : k2.history) check(r.length % 4 == 0, "eski kayit gecmisi dortlu degil");
+        g.restart();
+        for (int i = 0; i < 81; i++) check(g.corner[i] == 0 && g.color[i] == 0, "bastan basla kose ve rengi silmedi");
+        System.out.println("Kose notu ve renk testleri gecti");
     }
 
     static void stickyTests(Sudoku e) {
