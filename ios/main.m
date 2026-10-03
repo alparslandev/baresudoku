@@ -6,7 +6,9 @@
 
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
     S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
-    S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7 };
+    S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7, S_DAILY, S_SHARE, S_PLAY, S_STATS, S_PLAYED, S_BEST, S_AVERAGE, S_STREAK,
+    S_EXPLAIN, S_TIMER };
+enum { IDLE_MS = 60000, MENU_MAX = 12 };
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -20,7 +22,9 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"X-Chain", @"XY-Chain", @"Continuous Nice Loop", @"AIC", @"Grouped AIC", @"Sue de Coq", @"ALS-XZ",
     @"ALS-XY-Wing", @"Death Blossom", @"ALS Chain",
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
-    @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master"};
+    @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
+    @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
+    @"Explain", @"Show timer"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -33,12 +37,19 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"X-Chain", @"XY-Chain", @"Continuous Nice Loop", @"AIC", @"Grouped AIC", @"Sue de Coq", @"ALS-XZ",
     @"ALS-XY-Wing", @"Death Blossom", @"ALS Chain",
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
-    @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta"};
+    @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
+    @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
+    @"Açıkla", @"Zamanlayıcıyı göster"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
 static Sudoku engine;
 static int pendingLevel = -1;
+static NSString *dailyDate = @"";
+static BOOL dailyMenu;
+static BOOL showTimer = YES;
+static BOOL recorded;
+static NSString *const SITE = @"https://baresudoku.com/";
 
 static int64_t nowMs(void) {
     struct timespec ts;
@@ -48,8 +59,95 @@ static int64_t nowMs(void) {
 
 static void saveGame(void) {
     char *encoded = game_encode(&game, nowMs());
-    [[NSUserDefaults standardUserDefaults] setObject:[NSString stringWithUTF8String:encoded] forKey:@"g"];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setObject:[NSString stringWithUTF8String:encoded] forKey:@"g"];
+    [defaults setObject:dailyDate forKey:@"dd"];
     free(encoded);
+}
+
+static NSString *dateKey(NSDate *date) {
+    NSDateComponents *c = [[NSCalendar currentCalendar] components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:date];
+    return [NSString stringWithFormat:@"%04ld-%02ld-%02ld", (long)c.year, (long)c.month, (long)c.day];
+}
+
+static NSString *todayKey(void) {
+    return dateKey([NSDate date]);
+}
+
+static NSDate *dateOf(NSString *day) {
+    NSDateComponents *c = [NSDateComponents new];
+    c.year = [day substringWithRange:NSMakeRange(0, 4)].integerValue;
+    c.month = [day substringWithRange:NSMakeRange(5, 2)].integerValue;
+    c.day = [day substringWithRange:NSMakeRange(8, 2)].integerValue;
+    return [[NSCalendar currentCalendar] dateFromComponents:c];
+}
+
+static int dailySeed(NSString *day, int level) {
+    int ymd = (int)[day substringWithRange:NSMakeRange(0, 4)].integerValue * 10000 + (int)[day substringWithRange:NSMakeRange(5, 2)].integerValue * 100 + (int)[day substringWithRange:NSMakeRange(8, 2)].integerValue;
+    return ymd * 8 + level + 1;
+}
+
+static void loadStats(int *a) {
+    NSArray *parts = [([[NSUserDefaults standardUserDefaults] stringForKey:@"st"] ?: @"") componentsSeparatedByString:@","];
+    for (int i = 0; i < SUDOKU_LEVELS * 4; i++) a[i] = i < (int)parts.count ? MAX(0, [parts[i] intValue]) : 0;
+}
+
+static void storeStats(const int *a) {
+    NSMutableArray *parts = [NSMutableArray array];
+    for (int i = 0; i < SUDOKU_LEVELS * 4; i++) [parts addObject:@(a[i]).stringValue];
+    [[NSUserDefaults standardUserDefaults] setObject:[parts componentsJoinedByString:@","] forKey:@"st"];
+}
+
+static void recordStart(int level) {
+    int a[SUDOKU_LEVELS * 4];
+    loadStats(a);
+    a[level * 4]++;
+    storeStats(a);
+}
+
+static NSMutableArray *dailyLog(void) {
+    NSMutableArray *days = [NSMutableArray array];
+    for (NSString *day in [([[NSUserDefaults standardUserDefaults] stringForKey:@"dl"] ?: @"") componentsSeparatedByString:@";"]) if (day.length == 10) [days addObject:day];
+    return days;
+}
+
+static void logDaily(NSString *day) {
+    NSMutableArray *days = dailyLog();
+    if ([days containsObject:day]) return;
+    [days addObject:day];
+    [days sortUsingSelector:@selector(compare:)];
+    while (days.count > 400) [days removeObjectAtIndex:0];
+    [[NSUserDefaults standardUserDefaults] setObject:[days componentsJoinedByString:@";"] forKey:@"dl"];
+}
+
+static void recordSolved(int level, int seconds, NSString *day) {
+    int a[SUDOKU_LEVELS * 4];
+    loadStats(a);
+    a[level * 4 + 1]++;
+    a[level * 4 + 2] += seconds;
+    if (a[level * 4 + 3] == 0 || seconds < a[level * 4 + 3]) a[level * 4 + 3] = seconds;
+    storeStats(a);
+    if (day.length) logDaily(day);
+}
+
+static int dailyStreak(void) {
+    NSArray *days = dailyLog();
+    NSCalendar *calendar = [NSCalendar currentCalendar];
+    NSDate *date = [NSDate date];
+    if (![days containsObject:dateKey(date)]) date = [calendar dateByAddingUnit:NSCalendarUnitDay value:-1 toDate:date options:0];
+    int n = 0;
+    while ([days containsObject:dateKey(date)]) {
+        n++;
+        date = [calendar dateByAddingUnit:NSCalendarUnitDay value:-1 toDate:date options:0];
+    }
+    return n;
+}
+
+static NSString *digitString(const int *values) {
+    char buf[82];
+    for (int i = 0; i < 81; i++) buf[i] = (char)('0' + values[i]);
+    buf[81] = 0;
+    return [NSString stringWithUTF8String:buf];
 }
 
 static UIColor *rgb(uint32_t argb) {
@@ -101,11 +199,15 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
     CGFloat msgX, msgY, msgW, msgH;
     CGFloat toolX[5], toolY, toolW, toolH;
     CGFloat keyX[9], keyY[9], keyW, keyH;
-    BOOL menuOpen, wasGenerating;
+    BOOL menuOpen, wasGenerating, statsOpen, idle;
+    int64_t lastInput;
     int downTarget;
     NSTimer *timer;
     CGFloat menuX, menuW, menuTop, menuRowH, menuTitleH;
     int menuRows;
+    int menuItems[MENU_MAX][2], menuItemCount[MENU_MAX];
+    CGFloat statsX, statsW, statsTop, statsRowH;
+    int statsLines;
     int cursor, menuCursor;
     NSMutableDictionary *axElements;
     NSString *axLastMessage;
@@ -117,6 +219,7 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
 - (void)activateTarget:(int)t;
 - (void)shown;
 - (void)hidden;
+- (void)focusChanged:(BOOL)focused;
 @end
 
 static BoardView *current;
@@ -141,6 +244,7 @@ static BoardView *current;
     cursor = 40;
     menuOpen = !game.active && pendingLevel < 0;
     wasGenerating = pendingLevel >= 0;
+    lastInput = nowMs();
     self.contentMode = UIViewContentModeRedraw;
 #if !TARGET_OS_TV
     self.multipleTouchEnabled = NO;
@@ -256,8 +360,8 @@ static BoardView *current;
     BOOL generating = pendingLevel >= 0;
     if (wasGenerating && !generating) {
         wasGenerating = NO;
-        game_resume(&game, nowMs());
-        [self run];
+        lastInput = nowMs();
+        [self resumeIfAllowed];
     }
     [self drawTop:generating];
     if (generating) {
@@ -271,7 +375,10 @@ static BoardView *current;
 #if TARGET_OS_TV
     if (!generating && ![self overlay]) [self drawRing:[self targetRect:cursor]];
 #endif
-    if ([self overlay]) [self drawMenu];
+    if ([self overlay]) {
+        if (statsOpen) [self drawStats];
+        else [self drawMenu];
+    }
 }
 
 - (void)drawBoard {
@@ -348,7 +455,20 @@ static BoardView *current;
         if (x >= toolX[i] && x < toolX[i] + toolW && y >= toolY && y < toolY + toolH) return 200 + i;
     }
     if (x >= topX && x < topX + topW && y >= topY && y < topY + topH) return 300;
+    if ([self explainable] && x >= msgX && x < msgX + msgW && y >= msgY && y < msgY + msgH) return 302;
     return -1;
+}
+
+- (BOOL)explainable {
+#if TARGET_OS_TV
+    return NO;
+#else
+    return game.active && !game.solved && game_hint_active(&game) && game.hintKind == HINT_PLACE;
+#endif
+}
+
+- (NSString *)langPath {
+    return text == TR ? @"tr/" : @"";
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -367,8 +487,9 @@ static BoardView *current;
 }
 
 - (void)downAt:(CGPoint)p {
+    [self input];
     if ([self overlay]) {
-        downTarget = [self menuTargetAt:p];
+        downTarget = statsOpen ? [self statsTargetAt:p] : [self menuTargetAt:p];
         return;
     }
     if (pendingLevel >= 0) return;
@@ -391,7 +512,11 @@ static BoardView *current;
 
 - (void)upAt:(CGPoint)p {
     if ([self overlay]) {
-        if ([self menuTargetAt:p] == downTarget) [self menuAction:downTarget];
+        int t = statsOpen ? [self statsTargetAt:p] : [self menuTargetAt:p];
+        if (t == downTarget) {
+            if (statsOpen) [self closeStats];
+            else [self menuAction:downTarget];
+        }
         downTarget = -1;
         return;
     }
@@ -415,14 +540,25 @@ static BoardView *current;
     else if (t == 300) {
         [self openMenu];
         return;
+    } else if (t == 302) {
+#if !TARGET_OS_TV
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@solver/?p=%@", SITE, [self langPath], digitString(game.value)]];
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+#endif
+        return;
     }
     [self finish:changed || t == 202];
 }
 
 - (void)finish:(BOOL)changed {
     if (game.solved) {
-        game_pause(&game, nowMs());
+        int64_t now = nowMs();
+        game_pause(&game, now);
         [self stopTimer];
+        if (!recorded) {
+            recorded = YES;
+            recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate);
+        }
     }
     if (changed) saveGame();
     [self setNeedsDisplay];
@@ -433,13 +569,44 @@ static BoardView *current;
 }
 
 - (void)shown {
-    game_resume(&game, nowMs());
-    [self run];
+    lastInput = nowMs();
+    [self resumeIfAllowed];
 }
 
 - (void)hidden {
     game_pause(&game, nowMs());
     [self stopTimer];
+    [self setNeedsDisplay];
+}
+
+- (void)focusChanged:(BOOL)focused {
+    if (focused) {
+        [self resumeIfAllowed];
+        return;
+    }
+    game_pause(&game, nowMs());
+    [self stopTimer];
+    saveGame();
+    [self setNeedsDisplay];
+}
+
+- (BOOL)focused {
+    UIWindow *window = self.window;
+    return window && window.isKeyWindow && window.windowScene.activationState == UISceneActivationStateForegroundActive;
+}
+
+- (void)input {
+    lastInput = nowMs();
+    if (idle) {
+        idle = NO;
+        [self resumeIfAllowed];
+    }
+}
+
+- (void)resumeIfAllowed {
+    if (![self overlay] && !idle && pendingLevel < 0 && [self focused]) game_resume(&game, nowMs());
+    [self run];
+    [self setNeedsDisplay];
 }
 
 - (void)stopTimer {
@@ -449,10 +616,17 @@ static BoardView *current;
 
 - (void)run {
     [self stopTimer];
-    if (game.running) {
+    if (!game.running) return;
+    int64_t now = nowMs();
+    if (now - lastInput >= IDLE_MS) {
+        idle = YES;
+        game_pause(&game, now);
+        saveGame();
         [self setNeedsDisplay];
-        timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(run) userInfo:nil repeats:NO];
+        return;
     }
+    [self setNeedsDisplay];
+    timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(run) userInfo:nil repeats:NO];
 }
 
 - (NSString *)hintMessage {
@@ -475,7 +649,16 @@ static BoardView *current;
     }
     NSString *second = text[S_AGAIN];
     drawText(first, cx, msgY + msgH * 0.3, fit(first, size, msgW * 0.96), cAccent, 0);
-    drawText(second, cx, msgY + msgH * 0.72, fit(second, size * 0.9, msgW * 0.96), cMuted, 0);
+    if (![self explainable]) {
+        drawText(second, cx, msgY + msgH * 0.72, fit(second, size * 0.9, msgW * 0.96), cMuted, 0);
+        return;
+    }
+    NSString *link = [NSString stringWithFormat:@"  %@ \u203a", text[S_EXPLAIN]];
+    CGFloat small = fit([second stringByAppendingString:link], size * 0.9, msgW * 0.96);
+    CGFloat w1 = textWidth(second, small, 0), w2 = textWidth(link, small, 0);
+    CGFloat left = cx - (w1 + w2) / 2;
+    drawText(second, left + w1 / 2, msgY + msgH * 0.72, small, cMuted, 0);
+    drawText(link, left + w1 + w2 / 2, msgY + msgH * 0.72, small, cAccent, 0);
 }
 
 - (void)drawIcon:(int)kind cx:(CGFloat)cx cy:(CGFloat)cy size:(CGFloat)s color:(UIColor *)color {
@@ -543,7 +726,10 @@ static BoardView *current;
         NSString *s = generating ? [self levelName:level] : [self levelText];
         drawText(s, topX + topH * 0.2 + textWidth(s, size, 1) / 2, cy, size, cKeyText, 1);
     }
-    if (game.active && !generating) drawText([self clockString:game_time(&game, nowMs())], topX + topW / 2, cy, size, cMuted, 2);
+    if (game.active && !generating && showTimer) {
+        BOOL paused = !game.running && !game.solved && ![self overlay];
+        drawText([self clockString:game_time(&game, nowMs())], topX + topW / 2, cy, size, paused ? [cMuted colorWithAlphaComponent:0.4] : cMuted, 2);
+    }
     CGFloat mx = topX + topW - topH * 0.45;
     CGContextRef c = UIGraphicsGetCurrentContext();
     strokeSetup(c, cKeyText, topH * 0.07);
@@ -554,14 +740,42 @@ static BoardView *current;
     CGContextStrokePath(c);
 }
 
+- (BOOL)canShare {
+#if TARGET_OS_TV
+    return NO;
+#else
+    return YES;
+#endif
+}
+
+- (void)buildMenu {
+    BOOL solved = game.active && game.solved;
+    int n = 0;
+    if (solved && [self canShare]) { menuItems[n][0] = 412; menuItemCount[n++] = 1; }
+    for (int level = 0; level < 5; level++) { menuItems[n][0] = 400 + level; menuItemCount[n++] = 1; }
+    menuItems[n][0] = 405; menuItems[n][1] = 408; menuItemCount[n++] = 2;
+    menuItems[n][0] = 409; menuItems[n][1] = 411; menuItemCount[n++] = 2;
+    if ([self cancellable]) {
+        menuItems[n][0] = 406; menuItemCount[n++] = 1;
+        menuItems[n][0] = 407; menuItemCount[n++] = 1;
+    }
+    menuRows = n;
+}
+
+- (int)titleLines {
+    BOOL solved = game.active && game.solved;
+    BOOL dated = solved ? dailyDate.length > 0 : dailyMenu;
+    return 2 + (solved ? 1 : 0) + (dated ? 1 : 0);
+}
+
 - (void)layoutMenu {
     CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
     CGFloat base = MIN(w - insetL - insetR, h - insetT - insetB);
     menuW = base * 0.82;
-    menuRowH = base * 0.095;
-    BOOL solved = game.active && game.solved;
-    menuTitleH = menuRowH * (solved ? 2.2 : 1.6);
-    menuRows = [self cancellable] ? 8 : 6;
+    [self buildMenu];
+    CGFloat titleRows = 0.4 + [self titleLines] * 0.6;
+    menuRowH = MIN(base * 0.095, (h - insetT - insetB) * 0.94 / (titleRows + menuRows + 0.4));
+    menuTitleH = menuRowH * titleRows;
     CGFloat total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4;
     menuX = insetL + (w - insetL - insetR - menuW) / 2;
     menuTop = insetT + (h - insetT - insetB - total) / 2;
@@ -569,6 +783,48 @@ static BoardView *current;
 
 - (CGFloat)menuRowY:(int)row {
     return menuTop + menuTitleH + row * menuRowH;
+}
+
+- (CGRect)menuItemRect:(int)row item:(int)item {
+    int n = menuItemCount[row];
+    CGFloat side = menuRowH * 0.4, gap = menuRowH * 0.12;
+    CGFloat w = (menuW - 2 * side - gap * (n - 1)) / n;
+    return CGRectMake(menuX + side + item * (w + gap), [self menuRowY:row], w, menuRowH);
+}
+
+- (CGRect)menuRectOf:(int)target {
+    for (int row = 0; row < menuRows; row++) {
+        for (int item = 0; item < menuItemCount[row]; item++) if (menuItems[row][item] == target) return [self menuItemRect:row item:item];
+    }
+    return CGRectZero;
+}
+
+- (int)menuFlatCount {
+    int n = 0;
+    for (int row = 0; row < menuRows; row++) n += menuItemCount[row];
+    return n;
+}
+
+- (int)menuFlatTarget:(int)index {
+    for (int row = 0; row < menuRows; row++) {
+        if (index < menuItemCount[row]) return menuItems[row][index];
+        index -= menuItemCount[row];
+    }
+    return -1;
+}
+
+- (NSString *)dateText:(NSString *)day {
+    return [NSDateFormatter localizedStringFromDate:dateOf(day) dateStyle:NSDateFormatterLongStyle timeStyle:NSDateFormatterNoStyle];
+}
+
+- (NSArray *)titleTexts {
+    BOOL solved = game.active && game.solved;
+    NSMutableArray *lines = [NSMutableArray array];
+    [lines addObject:text[solved ? S_SOLVED : dailyMenu ? S_DAILY : S_TITLE]];
+    if (solved) [lines addObject:[NSString stringWithFormat:@"%@  %@", [self levelText], [self clockString:game_time(&game, 0)]]];
+    if (solved ? dailyDate.length > 0 : dailyMenu) [lines addObject:[self dateText:solved ? dailyDate : todayKey()]];
+    [lines addObject:text[S_NEW]];
+    return lines;
 }
 
 - (void)drawMenu {
@@ -579,25 +835,26 @@ static BoardView *current;
     fillRect(menuX, menuTop, menuX + menuW, bottom, cPanel, menuRowH * 0.3);
     BOOL solved = game.active && game.solved;
     CGFloat cx = menuX + menuW / 2;
+    NSArray *lines = [self titleTexts];
     CGFloat y = menuTop + menuRowH * 0.7;
-    drawText(text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5, cKeyText, 1);
-    y += menuRowH * 0.6;
-    if (solved) {
-        drawText([NSString stringWithFormat:@"%@  %@", [self levelText], [self clockString:game_time(&game, 0)]], cx, y, menuRowH * 0.38, cAccent, 0);
+    drawText(lines[0], cx, y, fit(lines[0], menuRowH * 0.5, menuW * 0.9), cKeyText, 1);
+    for (NSUInteger k = 1; k < lines.count; k++) {
         y += menuRowH * 0.6;
+        BOOL result = solved && k == 1;
+        drawText(lines[k], cx, y, fit(lines[k], menuRowH * (result ? 0.38 : 0.34), menuW * 0.9), result ? cAccent : cMuted, 0);
     }
-    drawText(text[S_NEW], cx, y, menuRowH * 0.34, cMuted, 0);
-    CGFloat side = menuRowH * 0.4;
     CGFloat inset = menuRowH * 0.08;
     for (int row = 0; row < menuRows; row++) {
-        CGFloat ry = [self menuRowY:row];
-        NSString *label = [self menuLabel:row];
-        fillRect(menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25);
-        drawText(label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4, menuW * 0.8), cKeyText, 0);
+        for (int item = 0; item < menuItemCount[row]; item++) {
+            CGRect r = [self menuItemRect:row item:item];
+            NSString *label = [self menuLabel:menuItems[row][item]];
+            fillRect(r.origin.x, r.origin.y + inset, CGRectGetMaxX(r), CGRectGetMaxY(r) - inset, cKey, menuRowH * 0.25);
+            drawText(label, CGRectGetMidX(r), CGRectGetMidY(r), fit(label, menuRowH * 0.4, r.size.width * 0.9), cKeyText, 0);
+        }
     }
 #if TARGET_OS_TV
-    CGFloat ry = [self menuRowY:menuCursor];
-    [self drawRing:CGRectMake(menuX + side, ry + inset, menuW - 2 * side, menuRowH - 2 * inset)];
+    menuCursor = MAX(0, MIN([self menuFlatCount] - 1, menuCursor));
+    [self drawRing:CGRectInset([self menuRectOf:[self menuFlatTarget:menuCursor]], 0, inset)];
 #endif
 }
 
@@ -606,8 +863,7 @@ static BoardView *current;
     CGFloat bottom = [self menuRowY:menuRows] + menuRowH * 0.4;
     if (p.x < menuX || p.x > menuX + menuW || p.y < menuTop || p.y > bottom) return 499;
     for (int row = 0; row < menuRows; row++) {
-        CGFloat ry = [self menuRowY:row];
-        if (p.y >= ry && p.y < ry + menuRowH) return 400 + row;
+        for (int item = 0; item < menuItemCount[row]; item++) if (CGRectContainsPoint([self menuItemRect:row item:item], p)) return menuItems[row][item];
     }
     return -1;
 }
@@ -619,6 +875,20 @@ static BoardView *current;
         game.showErrors = !game.showErrors;
         saveGame();
         [self setNeedsDisplay];
+    } else if (t == 408) {
+        showTimer = !showTimer;
+        [[NSUserDefaults standardUserDefaults] setObject:showTimer ? @"1" : @"0" forKey:@"t"];
+        [self setNeedsDisplay];
+    } else if (t == 409) {
+        dailyMenu = !dailyMenu;
+        [self setNeedsDisplay];
+        UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+    } else if (t == 411) {
+        statsOpen = YES;
+        [self setNeedsDisplay];
+        UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+    } else if (t == 412 && game.active && game.solved) {
+        [self share];
     } else if (t == 406 && [self cancellable]) {
         game_restart(&game);
         saveGame();
@@ -628,9 +898,111 @@ static BoardView *current;
     }
 }
 
+- (NSString *)shareText {
+    NSString *result = [NSString stringWithFormat:@"%@ \u00b7 %@", [self levelText], [self clockString:game_time(&game, 0)]];
+    if (dailyDate.length) return [NSString stringWithFormat:@"%@ %@ \u00b7 %@\n%@%@daily/", text[S_DAILY], [self dateText:dailyDate], result, SITE, [self langPath]];
+    return [NSString stringWithFormat:@"%@ \u00b7 %@\n%@%@?p=%@", text[S_TITLE], result, SITE, [self langPath], digitString(game.given)];
+}
+
+- (void)share {
+#if !TARGET_OS_TV
+    UIViewController *root = self.window.rootViewController;
+    if (!root || root.presentedViewController) return;
+    UIActivityViewController *sheet = [[UIActivityViewController alloc] initWithActivityItems:@[[self shareText]] applicationActivities:nil];
+    sheet.popoverPresentationController.sourceView = self;
+    sheet.popoverPresentationController.sourceRect = [self menuRectOf:412];
+    [root presentViewController:sheet animated:YES completion:nil];
+#endif
+}
+
+- (void)layoutStats {
+    CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
+    CGFloat base = MIN(w - insetL - insetR, h - insetT - insetB);
+    statsW = base * 0.9;
+    int a[SUDOKU_LEVELS * 4];
+    loadStats(a);
+    statsLines = 0;
+    for (int level = 0; level < SUDOKU_LEVELS; level++) if (a[level * 4] > 0 || a[level * 4 + 1] > 0) statsLines++;
+    CGFloat rows = 1.4 + 1 + statsLines + 1.2 + 1.2;
+    statsRowH = MIN(base * 0.085, (h - insetT - insetB) * 0.94 / rows);
+    statsX = insetL + (w - insetL - insetR - statsW) / 2;
+    statsTop = insetT + (h - insetT - insetB - statsRowH * rows) / 2;
+}
+
+- (CGRect)statsCloseRect {
+    CGFloat y = statsTop + statsRowH * (1.4 + 1 + statsLines + 1.2);
+    CGFloat side = statsRowH * 0.4;
+    return CGRectMake(statsX + side, y, statsW - 2 * side, statsRowH);
+}
+
+- (NSArray *)statsRow:(int)level stats:(const int *)a {
+    int p = a[level * 4], s = a[level * 4 + 1], t = a[level * 4 + 2], b = a[level * 4 + 3];
+    return @[[self levelName:level], [NSString stringWithFormat:@"%d / %d", s, p], b > 0 ? [self clockString:(int64_t)b * 1000] : @"-", s > 0 ? [self clockString:(int64_t)llround((double)t / s) * 1000] : @"-"];
+}
+
+- (void)drawStats {
+    [cDim setFill];
+    UIRectFillUsingBlendMode(self.bounds, kCGBlendModeNormal);
+    [self layoutStats];
+    CGRect close = [self statsCloseRect];
+    fillRect(statsX, statsTop, statsX + statsW, CGRectGetMaxY(close) + statsRowH * 0.4, cPanel, statsRowH * 0.3);
+    CGFloat cx = statsX + statsW / 2;
+    drawText(text[S_STATS], cx, statsTop + statsRowH * 0.75, fit(text[S_STATS], statsRowH * 0.55, statsW * 0.9), cKeyText, 1);
+    CGFloat colX[4] = {statsX + statsW * 0.2, statsX + statsW * 0.45, statsX + statsW * 0.66, statsX + statsW * 0.86};
+    CGFloat colW = statsW * 0.2;
+    CGFloat y = statsTop + statsRowH * 1.4 + statsRowH / 2;
+    NSString *head[4] = {@"", text[S_PLAYED], text[S_BEST], text[S_AVERAGE]};
+    for (int k = 1; k < 4; k++) drawText(head[k], colX[k], y, fit(head[k], statsRowH * 0.3, colW), cMuted, 0);
+    int a[SUDOKU_LEVELS * 4];
+    loadStats(a);
+    for (int level = 0; level < SUDOKU_LEVELS; level++) {
+        if (a[level * 4] == 0 && a[level * 4 + 1] == 0) continue;
+        y += statsRowH;
+        NSArray *cells = [self statsRow:level stats:a];
+        for (int k = 0; k < 4; k++) drawText(cells[k], colX[k], y, fit(cells[k], statsRowH * 0.38, k == 0 ? statsW * 0.28 : colW), cKeyText, k == 0 ? 1 : 0);
+    }
+    NSString *streak = [NSString stringWithFormat:@"%@: %d", text[S_STREAK], dailyStreak()];
+    drawText(streak, cx, y + statsRowH * 1.1, fit(streak, statsRowH * 0.38, statsW * 0.9), cMuted, 0);
+    fillRect(close.origin.x, close.origin.y + statsRowH * 0.08, CGRectGetMaxX(close), CGRectGetMaxY(close) - statsRowH * 0.08, cKey, statsRowH * 0.25);
+    drawText(text[S_CANCEL], CGRectGetMidX(close), CGRectGetMidY(close), fit(text[S_CANCEL], statsRowH * 0.4, close.size.width * 0.9), cKeyText, 0);
+#if TARGET_OS_TV
+    [self drawRing:close];
+#endif
+}
+
+- (int)statsTargetAt:(CGPoint)p {
+    [self layoutStats];
+    CGRect close = [self statsCloseRect];
+    if (CGRectContainsPoint(close, p)) return 431;
+    if (p.x < statsX || p.x > statsX + statsW || p.y < statsTop || p.y > CGRectGetMaxY(close) + statsRowH * 0.4) return 431;
+    return 430;
+}
+
+- (NSString *)statsSummary {
+    NSMutableString *sb = [NSMutableString stringWithString:text[S_STATS]];
+    int a[SUDOKU_LEVELS * 4];
+    loadStats(a);
+    for (int level = 0; level < SUDOKU_LEVELS; level++) {
+        if (a[level * 4] == 0 && a[level * 4 + 1] == 0) continue;
+        NSArray *cells = [self statsRow:level stats:a];
+        [sb appendFormat:@". %@: %@ %@, %@ %@, %@ %@", cells[0], text[S_PLAYED], cells[1], text[S_BEST], cells[2], text[S_AVERAGE], cells[3]];
+    }
+    [sb appendFormat:@". %@: %d", text[S_STREAK], dailyStreak()];
+    return sb;
+}
+
+- (void)closeStats {
+    statsOpen = NO;
+    [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+}
+
 - (void)startGame:(int)level {
     if (pendingLevel >= 0) return;
     menuOpen = NO;
+    statsOpen = NO;
+    idle = NO;
+    NSString *day = dailyMenu ? todayKey() : @"";
     game_pause(&game, nowMs());
     [self stopTimer];
     wasGenerating = YES;
@@ -641,12 +1013,16 @@ static BoardView *current;
         Sudoku *worker = malloc(sizeof(Sudoku));
         int *puzzle = malloc(sizeof(int) * 81);
         sudoku_init(worker, ((uint64_t)arc4random() << 32) ^ arc4random());
+        if (day.length) sudoku_seed(worker, dailySeed(day, level));
         sudoku_generate(worker, level, puzzle);
         dispatch_async(dispatch_get_main_queue(), ^{
             game_start(&game, puzzle, worker->solution, level);
             game.rating = worker->rating;
             free(puzzle);
             free(worker);
+            dailyDate = day;
+            recorded = NO;
+            recordStart(level);
             saveGame();
             pendingLevel = -1;
             [current setNeedsDisplay];
@@ -666,9 +1042,10 @@ static BoardView *current;
 
 - (void)closeMenu {
     menuOpen = NO;
-    game_resume(&game, nowMs());
-    [self run];
-    [self setNeedsDisplay];
+    statsOpen = NO;
+    idle = NO;
+    lastInput = nowMs();
+    [self resumeIfAllowed];
     UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
 }
 
@@ -723,9 +1100,9 @@ static BoardView *current;
 - (void)moveCursor:(int)dir {
     if (pendingLevel >= 0) return;
     if ([self overlay]) {
-        if (dir > 1) return;
+        if (statsOpen) return;
         [self layoutMenu];
-        menuCursor = MAX(0, MIN(menuRows - 1, menuCursor + (dir == 0 ? -1 : 1)));
+        menuCursor = MAX(0, MIN([self menuFlatCount] - 1, menuCursor + (dir == 0 || dir == 2 ? -1 : 1)));
     } else {
         cursor = [self neighborOf:cursor dir:dir];
     }
@@ -770,14 +1147,22 @@ static BoardView *current;
         }
     }
     if (pendingLevel >= 0) return !menu;
+    [self input];
     if ([self overlay]) {
-        if (dir == 0 || dir == 1) {
+        if (statsOpen) {
+            if (select || menu || escape || play) {
+                [self closeStats];
+                return YES;
+            }
+            return dir >= 0;
+        }
+        if (dir >= 0) {
             [self moveCursor:dir];
             return YES;
         }
         if (select) {
             [self layoutMenu];
-            [self menuAction:400 + menuCursor];
+            [self menuAction:[self menuFlatTarget:menuCursor]];
             return YES;
         }
         if ((menu || escape || play) && [self cancellable]) {
@@ -839,10 +1224,14 @@ static BoardView *current;
     return game.rating > 0 ? [NSString stringWithFormat:@"%@ %@", name, [NSString localizedStringWithFormat:@"%.1f", game.rating / 10.0]] : name;
 }
 
-- (NSString *)menuLabel:(int)row {
-    if (row < 5) return [self levelName:row];
-    if (row == 5) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
-    return text[row == 6 ? S_RESTART : S_CANCEL];
+- (NSString *)menuLabel:(int)target {
+    if (target < 405) return [self levelName:target - 400];
+    if (target == 405) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
+    if (target == 408) return [NSString stringWithFormat:@"%@: %@", text[S_TIMER], text[showTimer ? S_ON : S_OFF]];
+    if (target == 409) return text[dailyMenu ? S_PLAY : S_DAILY];
+    if (target == 411) return text[S_STATS];
+    if (target == 412) return text[S_SHARE];
+    return text[target == 406 ? S_RESTART : S_CANCEL];
 }
 
 - (BOOL)isAccessibilityElement {
@@ -883,23 +1272,32 @@ static BoardView *current;
         return list;
     }
     if ([self overlay]) {
+        if (statsOpen) {
+            [self layoutStats];
+            CGRect close = [self statsCloseRect];
+            [list addObject:[self axElement:430 frame:CGRectMake(statsX, statsTop, statsW, close.origin.y - statsTop) label:[self statsSummary] value:nil traits:UIAccessibilityTraitStaticText]];
+            [list addObject:[self axElement:431 frame:close label:text[S_CANCEL] value:nil traits:UIAccessibilityTraitButton]];
+            return list;
+        }
         [self layoutMenu];
-        BOOL solved = game.active && game.solved;
-        NSString *title = solved ? [NSString stringWithFormat:@"%@ %@ %@", text[S_SOLVED], [self levelText], [self clockString:game_time(&game, 0)]] : text[S_TITLE];
-        [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[NSString stringWithFormat:@"%@. %@", title, text[S_NEW]] value:nil traits:UIAccessibilityTraitHeader]];
+        [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[[self titleTexts] componentsJoinedByString:@". "] value:nil traits:UIAccessibilityTraitHeader]];
         for (int row = 0; row < menuRows; row++) {
-            [list addObject:[self axElement:400 + row frame:CGRectMake(menuX, [self menuRowY:row], menuW, menuRowH) label:[self menuLabel:row] value:nil traits:UIAccessibilityTraitButton]];
+            for (int item = 0; item < menuItemCount[row]; item++) {
+                int target = menuItems[row][item];
+                [list addObject:[self axElement:target frame:[self menuItemRect:row item:item] label:[self menuLabel:target] value:nil traits:UIAccessibilityTraitButton]];
+            }
         }
         return list;
     }
     BOOL playable = game.active && !game.solved;
-    NSString *top = game.active ? [NSString stringWithFormat:@"%@, %@", [self levelText], [self clockString:game_time(&game, nowMs())]] : @"";
+    NSString *top = game.active ? (showTimer ? [NSString stringWithFormat:@"%@, %@", [self levelText], [self clockString:game_time(&game, nowMs())]] : [self levelText]) : @"";
     [list addObject:[self axElement:301 frame:CGRectMake(topX, topY, topW - topH * 0.9, topH) label:top value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
     [list addObject:[self axElement:300 frame:[self targetRect:300] label:text[S_NEW] value:nil traits:UIAccessibilityTraitButton]];
     if (game.active && game_hint_active(&game)) {
         NSString *message = [self hintMessage];
         if (game.hintKind == HINT_PLACE) message = [NSString stringWithFormat:@"%@. %@", message, text[S_AGAIN]];
-        [list addObject:[self axElement:302 frame:CGRectMake(msgX, msgY, msgW, msgH) label:message value:nil traits:UIAccessibilityTraitStaticText]];
+        if ([self explainable]) message = [NSString stringWithFormat:@"%@. %@", message, text[S_EXPLAIN]];
+        [list addObject:[self axElement:302 frame:CGRectMake(msgX, msgY, msgW, msgH) label:message value:nil traits:[self explainable] ? UIAccessibilityTraitButton : UIAccessibilityTraitStaticText]];
     }
     for (int i = 0; i < 81; i++) {
         NSString *label = [NSString stringWithFormat:@"%@ %d, %@ %d", text[S_ROWLABEL], SUDOKU_ROW[i] + 1, text[S_COLLABEL], SUDOKU_COL[i] + 1];
@@ -929,12 +1327,23 @@ static BoardView *current;
 
 - (void)activateTarget:(int)t {
     if (pendingLevel >= 0 || t < 0) return;
+    [self input];
     if ([self overlay]) {
-        if (t >= 400) [self menuAction:t];
+        if (statsOpen) {
+            if (t == 431) [self closeStats];
+        } else if (t >= 400 && t != 410 && t != 420) [self menuAction:t];
         return;
     }
     if (t < 81) [self finish:game_tap(&game, t)];
-    else if (t >= 100) [self act:t];
+    else if (t == 302) {
+        if ([self explainable]) [self act:t];
+    } else if (t >= 100) [self act:t];
+}
+
+- (CGPoint)menuPointOf:(int)target {
+    [self layoutMenu];
+    CGRect r = [self menuRectOf:target];
+    return CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r));
 }
 
 #ifdef SELFTEST
@@ -957,14 +1366,14 @@ static BoardView *current;
 
 - (void)selftest:(NSNumber *)stepNumber {
     int step = stepNumber.intValue;
-    if (step == 0) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:0] + menuRowH / 2)]; }
+    if (step == 0) [self press:[self menuPointOf:400]];
     else if (step == 1) [self press:CGPointMake(keyX[2] + keyW / 2, keyY[2] + keyH / 2)];
     else if (step == 2) [self press:[self cellPoint:0]];
     else if (step == 3) [self press:CGPointMake(toolX[2] + toolW / 2, toolY + toolH / 2)];
     else if (step == 4) [self press:[self cellPoint:1]];
     else if (step == 5) [self press:CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2)];
     else if (step == 6) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)];
-    else if (step == 7) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:7] + menuRowH / 2)]; }
+    else if (step == 7) [self press:[self menuPointOf:407]];
     NSLog(@"selftest %d: active=%d pending=%d sel=%d sticky=%d note=%d v0=%d given0=%d n1=%d given1=%d hint=%d menu=%d rows=%d", step, game.active, pendingLevel, game.selected, game.sticky, game.noteMode, game.value[0], game.given[0], game.notes[1], game.given[1], game.hintKind, menuOpen, menuRows);
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
 }
@@ -985,7 +1394,7 @@ static BoardView *current;
     int given = 0;
     while (given < 80 && game.given[given] == 0) given++;
     CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
-    if (step == 0) { self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight; [self applyTheme]; [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:2] + menuRowH / 2)]; }
+    if (step == 0) { self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleLight; [self applyTheme]; [self press:[self menuPointOf:402]]; }
     else if (step <= 12) [self press:hint];
     else if (step == 13) { [self press:[self cellPoint:given]]; [self snapshot:@"1-board"]; }
     else if (step == 14) {
@@ -997,7 +1406,7 @@ static BoardView *current;
     }
     else if (step == 15) { [self press:CGPointMake(keyX[demoDigit - 1] + keyW / 2, keyY[demoDigit - 1] + keyH / 2)]; [self press:hint]; [self snapshot:@"3-hint"]; }
     else if (step == 16) { [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)]; [self snapshot:@"4-menu"]; }
-    else if (step == 17) { [self layoutMenu]; [self press:CGPointMake(menuX + menuW / 2, [self menuRowY:7] + menuRowH / 2)]; }
+    else if (step == 17) [self press:[self menuPointOf:407]];
     else if (step == 18) self.window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
     else if (step == 19) { [self applyTheme]; [self snapshot:@"5-dark"]; }
     NSLog(@"demo %d: sel=%d sticky=%d hint=%d menu=%d size=%.0fx%.0f", step, game.selected, game.sticky, game.hintKind, menuOpen, self.bounds.size.width, self.bounds.size.height);
@@ -1061,6 +1470,9 @@ static BoardView *current;
     [current hidden];
     saveGame();
 }
+- (void)sceneDidEnterBackground:(UIScene *)scene {
+    saveGame();
+}
 @end
 
 @interface AppDelegate : UIResponder <UIApplicationDelegate>
@@ -1070,8 +1482,15 @@ static BoardView *current;
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     sudoku_init(&engine, ((uint64_t)arc4random() << 32) ^ arc4random());
     game_init(&game);
-    game_decode(&game, [[NSUserDefaults standardUserDefaults] stringForKey:@"g"].UTF8String);
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    game_decode(&game, [defaults stringForKey:@"g"].UTF8String);
+    dailyDate = game.active ? ([defaults stringForKey:@"dd"] ?: @"") : @"";
+    dailyMenu = dailyDate.length > 0;
+    showTimer = ![[defaults stringForKey:@"t"] isEqualToString:@"0"];
+    recorded = game.solved;
     if (game.active) game.rating = sudoku_rate(&engine, game.given);
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidResignKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) { [current focusChanged:NO]; }];
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) { [current focusChanged:YES]; }];
     return YES;
 }
 @end
