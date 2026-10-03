@@ -8,23 +8,27 @@
 #define HINT_NONE 0
 #define HINT_WRONG 1
 #define HINT_PLACE 2
+#define GAME_COLORS 6
 
 typedef struct Game {
     int given[81];
     int solution[81];
     int value[81];
     int notes[81];
+    int corner[81];
+    int color[81];
     int *hist;
     int histLen;
     int histCap;
     int *recStart;
     int histCount;
     int recCap;
-    int record[243];
+    int record[324];
     int recordLength;
     int active;
     int solved;
     int noteMode;
+    int cornerMode;
     int showErrors;
     int level;
     int rating;
@@ -49,6 +53,8 @@ int game_can_edit(const Game *g);
 void game_select(Game *g, int cell);
 int game_enter(Game *g, int d);
 int game_erase(Game *g);
+void game_cycle_notes(Game *g);
+int game_paint(Game *g, int k);
 int game_undo(Game *g);
 int game_fill_notes(Game *g);
 int game_hint_active(const Game *g);

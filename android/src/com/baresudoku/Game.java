@@ -5,16 +5,20 @@ import java.util.Arrays;
 
 final class Game {
     static final int NONE = -1;
+    static final int COLORS = 6;
     final int[] given = new int[81];
     final int[] solution = new int[81];
     final int[] value = new int[81];
     final int[] notes = new int[81];
+    final int[] corner = new int[81];
+    final int[] color = new int[81];
     final ArrayList<int[]> history = new ArrayList<int[]>();
-    private final int[] record = new int[243];
+    private final int[] record = new int[324];
     private int recordLength;
     boolean active;
     boolean solved;
     boolean noteMode;
+    boolean cornerMode;
     boolean showErrors = true;
     int level;
     int rating;
@@ -35,10 +39,13 @@ final class Game {
     void restart() {
         System.arraycopy(given, 0, value, 0, 81);
         Arrays.fill(notes, 0);
+        Arrays.fill(corner, 0);
+        Arrays.fill(color, 0);
         history.clear();
         recordLength = 0;
         solved = false;
         noteMode = false;
+        cornerMode = false;
         selected = NONE;
         sticky = 0;
         elapsed = 0;
@@ -60,7 +67,8 @@ final class Game {
         if (noteMode) {
             if (value[c] != 0) return false;
             touch(c);
-            notes[c] ^= Sudoku.bit(d);
+            if (cornerMode) corner[c] ^= Sudoku.bit(d);
+            else notes[c] ^= Sudoku.bit(d);
             return commit();
         }
         touch(c);
@@ -70,11 +78,13 @@ final class Game {
         }
         value[c] = d;
         notes[c] = 0;
+        corner[c] = 0;
         int b = Sudoku.bit(d);
         for (int p : Sudoku.PEERS[c]) {
-            if ((notes[p] & b) != 0) {
+            if (((notes[p] | corner[p]) & b) != 0) {
                 touch(p);
                 notes[p] &= ~b;
+                corner[p] &= ~b;
             }
         }
         commit();
@@ -103,18 +113,35 @@ final class Game {
     }
 
     boolean erase() {
-        if (!canEdit() || (value[selected] == 0 && notes[selected] == 0)) return false;
+        if (!canEdit() || (value[selected] == 0 && notes[selected] == 0 && corner[selected] == 0)) return false;
         touch(selected);
         value[selected] = 0;
         notes[selected] = 0;
+        corner[selected] = 0;
         return commit();
     }
 
+    void cycleNotes() {
+        if (!noteMode) noteMode = true;
+        else if (!cornerMode) cornerMode = true;
+        else {
+            noteMode = false;
+            cornerMode = false;
+        }
+    }
+
+    boolean paint(int k) {
+        if (!active || solved || selected < 0) return false;
+        color[selected] = color[selected] == k ? 0 : k;
+        return true;
+    }
+
     private void touch(int cell) {
-        for (int i = 0; i < recordLength; i += 3) if (record[i] == cell) return;
+        for (int i = 0; i < recordLength; i += 4) if (record[i] == cell) return;
         record[recordLength++] = cell;
         record[recordLength++] = value[cell];
         record[recordLength++] = notes[cell];
+        record[recordLength++] = corner[cell];
     }
 
     private boolean commit() {
@@ -168,9 +195,10 @@ final class Game {
     boolean undo() {
         if (!active || solved || history.isEmpty()) return false;
         int[] r = history.remove(history.size() - 1);
-        for (int i = 0; i < r.length; i += 3) {
+        for (int i = 0; i < r.length; i += 4) {
             value[r[i]] = r[i + 1];
             notes[r[i]] = r[i + 2];
+            corner[r[i]] = r[i + 3];
         }
         if (sticky == 0) selected = r[0];
         return true;
@@ -215,6 +243,7 @@ final class Game {
         sticky = 0;
         if (hintActive() && hintKind == HINT_PLACE && value[hintCell] == 0) {
             noteMode = false;
+            cornerMode = false;
             hintKind = HINT_NONE;
             return enter(hintDigit);
         }
@@ -250,9 +279,7 @@ final class Game {
         sb.append('|');
         appendDigits(sb, value);
         sb.append('|');
-        for (int m : notes) {
-            sb.append((char) ('0' + (m >> 6))).append((char) ('0' + ((m >> 3) & 7))).append((char) ('0' + (m & 7)));
-        }
+        appendMasks(sb, notes);
         sb.append('|').append(history.size());
         for (int[] r : history) {
             sb.append('|');
@@ -261,7 +288,32 @@ final class Game {
                 sb.append(r[i]);
             }
         }
+        sb.append('|');
+        appendMasks(sb, corner);
+        sb.append('|');
+        appendDigits(sb, color);
+        sb.append('|').append(cornerMode ? 1 : 0);
         return sb.toString();
+    }
+
+    private static void appendMasks(StringBuilder sb, int[] masks) {
+        for (int m : masks) {
+            sb.append((char) ('0' + (m >> 6))).append((char) ('0' + ((m >> 3) & 7))).append((char) ('0' + (m & 7)));
+        }
+    }
+
+    private static boolean readMasks(String s, int[] masks) {
+        if (s.length() != 243) return false;
+        for (int i = 0; i < 81; i++) {
+            int m = 0;
+            for (int k = 0; k < 3; k++) {
+                int o = s.charAt(i * 3 + k) - '0';
+                if (o < 0 || o > 7) return false;
+                m = (m << 3) | o;
+            }
+            masks[i] = m;
+        }
+        return true;
     }
 
     private static void appendDigits(StringBuilder sb, int[] a) {
@@ -292,31 +344,39 @@ final class Game {
             readDigits(f[7], given);
             readDigits(f[8], solution);
             readDigits(f[9], value);
-            if (f[10].length() != 243) return false;
-            for (int i = 0; i < 81; i++) {
-                int m = 0;
-                for (int k = 0; k < 3; k++) {
-                    int o = f[10].charAt(i * 3 + k) - '0';
-                    if (o < 0 || o > 7) return false;
-                    m = (m << 3) | o;
-                }
-                notes[i] = m;
-            }
+            if (!readMasks(f[10], notes)) return false;
             int n = Integer.parseInt(f[11]);
-            if (n < 0 || f.length != 12 + n) return false;
+            boolean extended = n >= 0 && f.length == 15 + n;
+            if (n < 0 || (!extended && f.length != 12 + n)) return false;
+            int width = extended ? 4 : 3;
             history.clear();
             for (int k = 0; k < n; k++) {
                 String[] parts = f[12 + k].split(",");
-                if (parts.length % 3 != 0) return false;
-                int[] r = new int[parts.length];
-                for (int i = 0; i < parts.length; i++) r[i] = Integer.parseInt(parts[i]);
+                if (parts.length % width != 0) return false;
+                int[] r = new int[parts.length / width * 4];
+                for (int i = 0, j = 0; i < parts.length; i += width, j += 4) {
+                    r[j] = Integer.parseInt(parts[i]);
+                    r[j + 1] = Integer.parseInt(parts[i + 1]);
+                    r[j + 2] = Integer.parseInt(parts[i + 2]);
+                    r[j + 3] = extended ? Integer.parseInt(parts[i + 3]) : 0;
+                }
                 history.add(r);
+            }
+            Arrays.fill(corner, 0);
+            Arrays.fill(color, 0);
+            cornerMode = false;
+            if (extended) {
+                if (!readMasks(f[12 + n], corner)) return false;
+                readDigits(f[13 + n], color);
+                for (int i = 0; i < 81; i++) if (color[i] > COLORS) return false;
+                cornerMode = f[14 + n].equals("1");
             }
             recordLength = 0;
             level = lvl;
             rating = 0;
             solved = f[2].equals("1");
             noteMode = f[4].equals("1");
+            cornerMode = noteMode && cornerMode;
             selected = sel;
             elapsed = time;
             running = false;
