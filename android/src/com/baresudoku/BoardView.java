@@ -46,6 +46,18 @@ final class BoardView extends View implements Runnable {
     static final int S_LEFT = 32;
     static final int S_TECH_EXTRA = 33;
     static final int S_MASTER = S_TECH_EXTRA + Sudoku.TECH_COUNT - 7;
+    static final int S_DAILY = S_MASTER + 1;
+    static final int S_SHARE = S_MASTER + 2;
+    static final int S_PLAY = S_MASTER + 3;
+    static final int S_STATS = S_MASTER + 4;
+    static final int S_PLAYED = S_MASTER + 5;
+    static final int S_BEST = S_MASTER + 6;
+    static final int S_AVERAGE = S_MASTER + 7;
+    static final int S_STREAK = S_MASTER + 8;
+    static final int S_EXPLAIN = S_MASTER + 9;
+    static final int S_TIMER = S_MASTER + 10;
+    static final long IDLE_MS = 60000;
+    static final String SITE = "https://baresudoku.com/";
     static final String[] EN = {"Easy", "Medium", "Hard", "Expert", "Undo", "Erase", "Notes", "Fill notes", "Hint",
         "New game", "Show mistakes", "On", "Off", "Cancel", "Solved!", "Preparing…", "This digit is wrong",
         "Only one candidate here: #", "Only place for # in this row", "Only place for # in this column",
@@ -58,7 +70,9 @@ final class BoardView extends View implements Runnable {
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
         "Death Blossom", "ALS Chain",
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
-        "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master"};
+        "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master",
+        "Daily Sudoku", "Share", "Play Sudoku", "Statistics", "Solved", "Best time", "Average time", "Daily streak",
+        "Explain", "Show timer"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -71,7 +85,9 @@ final class BoardView extends View implements Runnable {
         "X-Chain", "XY-Chain", "Continuous Nice Loop", "AIC", "Grouped AIC", "Sue de Coq", "ALS-XZ", "ALS-XY-Wing",
         "Death Blossom", "ALS Chain",
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
-        "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta"};
+        "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta",
+        "Günlük Sudoku", "Paylaş", "Sudoku oyna", "İstatistik", "Çözülen", "En iyi süre", "Ortalama süre", "Günlük seri",
+        "Açıkla", "Zamanlayıcıyı göster"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -123,6 +139,9 @@ final class BoardView extends View implements Runnable {
     float keyW;
     float keyH;
     boolean menuOpen;
+    boolean statsOpen;
+    boolean idle;
+    long lastInput = SystemClock.elapsedRealtime();
     int downTarget = -1;
     BoardNodes nodes;
     int hovered = -1;
@@ -274,8 +293,8 @@ final class BoardView extends View implements Runnable {
         boolean generating = MainActivity.pendingLevel >= 0;
         if (wasGenerating && !generating) {
             wasGenerating = false;
-            game.resume(SystemClock.elapsedRealtime());
-            run();
+            lastInput = SystemClock.elapsedRealtime();
+            resumeIfAllowed();
             sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
         }
         drawTop(c, generating);
@@ -287,7 +306,10 @@ final class BoardView extends View implements Runnable {
         drawMessage(c);
         drawTools(c);
         drawKeys(c);
-        if (overlay()) drawMenu(c);
+        if (overlay()) {
+            if (statsOpen) drawStats(c);
+            else drawMenu(c);
+        }
     }
 
     private void drawBoard(Canvas c) {
@@ -360,18 +382,28 @@ final class BoardView extends View implements Runnable {
             if (x >= toolX[i] && x < toolX[i] + toolW && y >= toolY && y < toolY + toolH) return 200 + i;
         }
         if (x >= topX && x < topX + topW && y >= topY && y < topY + topH) return 300;
+        if (explainable() && x >= msgX && x < msgX + msgW && y >= msgY && y < msgY + msgH) return 302;
         return -1;
+    }
+
+    private boolean explainable() {
+        return game.active && !game.solved && game.hintActive() && game.hintKind == Game.HINT_PLACE;
     }
 
     public boolean onTouchEvent(MotionEvent e) {
         int action = e.getActionMasked();
         float x = e.getX();
         float y = e.getY();
+        if (action == MotionEvent.ACTION_DOWN) input();
         if (overlay()) {
             if (action == MotionEvent.ACTION_DOWN) {
-                downTarget = menuTarget(x, y);
+                downTarget = statsOpen ? statsTarget(x, y) : menuTarget(x, y);
             } else if (action == MotionEvent.ACTION_UP) {
-                if (menuTarget(x, y) == downTarget) menuAction(downTarget);
+                int t = statsOpen ? statsTarget(x, y) : menuTarget(x, y);
+                if (t == downTarget) {
+                    if (statsOpen) closeStats();
+                    else menuAction(downTarget);
+                }
                 downTarget = -1;
             }
             return true;
@@ -407,14 +439,32 @@ final class BoardView extends View implements Runnable {
         else if (t == 300) {
             openMenu();
             return;
+        } else if (t == 302) {
+            host.open(SITE + langPath() + "solver/?p=" + digits(game.value));
+            return;
         }
         finish(changed || t == 202);
     }
 
+    private String langPath() {
+        return text == TR ? "tr/" : "";
+    }
+
+    private static String digits(int[] values) {
+        StringBuilder sb = new StringBuilder(81);
+        for (int v : values) sb.append((char) ('0' + v));
+        return sb.toString();
+    }
+
     private void finish(boolean changed) {
         if (game.solved) {
-            game.pause(SystemClock.elapsedRealtime());
+            long now = SystemClock.elapsedRealtime();
+            game.pause(now);
             removeCallbacks(this);
+            if (!MainActivity.recorded) {
+                MainActivity.recorded = true;
+                MainActivity.recordSolved(game.level, (int) (game.time(now) / 1000), MainActivity.dailyDate);
+            }
         }
         if (changed) MainActivity.save();
         invalidate();
@@ -425,8 +475,8 @@ final class BoardView extends View implements Runnable {
     }
 
     void shown() {
-        game.resume(SystemClock.elapsedRealtime());
-        run();
+        lastInput = SystemClock.elapsedRealtime();
+        resumeIfAllowed();
     }
 
     void hidden() {
@@ -434,12 +484,46 @@ final class BoardView extends View implements Runnable {
         removeCallbacks(this);
     }
 
+    void focusChanged(boolean hasFocus) {
+        if (hasFocus) {
+            resumeIfAllowed();
+            return;
+        }
+        game.pause(SystemClock.elapsedRealtime());
+        removeCallbacks(this);
+        MainActivity.save();
+        invalidate();
+    }
+
+    private void input() {
+        lastInput = SystemClock.elapsedRealtime();
+        if (idle) {
+            idle = false;
+            resumeIfAllowed();
+        }
+    }
+
+    private void resumeIfAllowed() {
+        if (!overlay() && !idle && host.resumed && hasWindowFocus() && MainActivity.pendingLevel < 0) {
+            game.resume(SystemClock.elapsedRealtime());
+        }
+        run();
+        invalidate();
+    }
+
     public void run() {
         removeCallbacks(this);
-        if (game.running) {
+        if (!game.running) return;
+        long now = SystemClock.elapsedRealtime();
+        if (now - lastInput >= IDLE_MS) {
+            idle = true;
+            game.pause(now);
+            MainActivity.save();
             invalidate();
-            postDelayed(this, 1000);
+            return;
         }
+        invalidate();
+        postDelayed(this, 1000);
     }
 
     private float fit(String s, float size, float maxWidth) {
@@ -468,8 +552,13 @@ final class BoardView extends View implements Runnable {
             return;
         }
         String second = text[S_AGAIN];
+        String link = "  " + text[S_EXPLAIN] + " \u203a";
         drawText(c, first, cx, msgY + msgH * 0.3f, fit(first, size, msgW * 0.96f), cAccent, Typeface.DEFAULT);
-        drawText(c, second, cx, msgY + msgH * 0.72f, fit(second, size * 0.9f, msgW * 0.96f), cMuted, Typeface.DEFAULT);
+        float small = fit(second + link, size * 0.9f, msgW * 0.96f);
+        float w1 = width(second, small, Typeface.DEFAULT), w2 = width(link, small, Typeface.DEFAULT);
+        float left = cx - (w1 + w2) / 2;
+        drawText(c, second, left + w1 / 2, msgY + msgH * 0.72f, small, cMuted, Typeface.DEFAULT);
+        drawText(c, link, left + w1 + w2 / 2, msgY + msgH * 0.72f, small, cAccent, Typeface.DEFAULT);
     }
 
     private void drawIcon(Canvas c, int kind, float cx, float cy, float s, int color) {
@@ -539,6 +628,7 @@ final class BoardView extends View implements Runnable {
     float menuRowH;
     float menuTitleH;
     int menuRows;
+    int[][] menuSpec = new int[0][];
 
     private boolean overlay() {
         return menuOpen || (game.active && game.solved);
@@ -562,8 +652,9 @@ final class BoardView extends View implements Runnable {
             String s = generating ? levelName(level) : levelText();
             drawText(c, s, topX + topH * 0.2f + width(s, size, Typeface.DEFAULT_BOLD) / 2, cy, size, cKeyText, Typeface.DEFAULT_BOLD);
         }
-        if (game.active && !generating) {
-            drawText(c, clock(game.time(SystemClock.elapsedRealtime())), topX + topW / 2, cy, size, cMuted, Typeface.MONOSPACE);
+        if (game.active && !generating && MainActivity.showTimer) {
+            boolean paused = !game.running && !game.solved && !overlay();
+            drawText(c, clock(game.time(SystemClock.elapsedRealtime())), topX + topW / 2, cy, size, paused ? (cMuted & 0x00FFFFFF) | 0x66000000 : cMuted, Typeface.MONOSPACE);
         }
         float mx = topX + topW - topH * 0.45f;
         paint.setStyle(Paint.Style.STROKE);
@@ -575,13 +666,36 @@ final class BoardView extends View implements Runnable {
         }
     }
 
+    private int[][] buildMenuSpec() {
+        boolean solved = game.active && game.solved;
+        int n = (solved ? 1 : 0) + 7 + (cancellable() ? 2 : 0);
+        int[][] rows = new int[n][];
+        int k = 0;
+        if (solved) rows[k++] = new int[] {412};
+        for (int level = 0; level < 5; level++) rows[k++] = new int[] {400 + level};
+        rows[k++] = new int[] {405, 408};
+        rows[k++] = new int[] {409, 411};
+        if (cancellable()) {
+            rows[k++] = new int[] {406};
+            rows[k++] = new int[] {407};
+        }
+        return rows;
+    }
+
+    private int titleLines() {
+        boolean solved = game.active && game.solved;
+        boolean dated = solved ? !MainActivity.dailyDate.isEmpty() : MainActivity.dailyMenu;
+        return 2 + (solved ? 1 : 0) + (dated ? 1 : 0);
+    }
+
     private void layoutMenu(int w, int h) {
         float base = Math.min(w - insetL - insetR, h - insetT - insetB);
         menuW = base * 0.82f;
-        menuRowH = base * 0.095f;
-        boolean solved = game.active && game.solved;
-        menuTitleH = menuRowH * (solved ? 2.2f : 1.6f);
-        menuRows = cancellable() ? 8 : 6;
+        menuSpec = buildMenuSpec();
+        menuRows = menuSpec.length;
+        float titleRows = 0.4f + titleLines() * 0.6f;
+        menuRowH = Math.min(base * 0.095f, (h - insetT - insetB) * 0.94f / (titleRows + menuRows + 0.4f));
+        menuTitleH = menuRowH * titleRows;
         float total = menuTitleH + menuRows * menuRowH + menuRowH * 0.4f;
         menuX = insetL + (w - insetL - insetR - menuW) / 2;
         menuTop = insetT + (h - insetT - insetB - total) / 2;
@@ -591,6 +705,31 @@ final class BoardView extends View implements Runnable {
         return menuTop + menuTitleH + row * menuRowH;
     }
 
+    private RectF menuItemRect(int row, int item) {
+        int n = menuSpec[row].length;
+        float side = menuRowH * 0.4f;
+        float gap = menuRowH * 0.12f;
+        float w = (menuW - 2 * side - gap * (n - 1)) / n;
+        float x = menuX + side + item * (w + gap);
+        float ry = menuRowY(row);
+        return new RectF(x, ry, x + w, ry + menuRowH);
+    }
+
+    private String dateText(String day) {
+        return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG, Locale.getDefault()).format(MainActivity.parseDate(day).getTime());
+    }
+
+    private String[] titleTexts() {
+        boolean solved = game.active && game.solved;
+        String[] lines = new String[titleLines()];
+        int k = 0;
+        lines[k++] = text[solved ? S_SOLVED : MainActivity.dailyMenu ? S_DAILY : S_TITLE];
+        if (solved) lines[k++] = levelText() + "  " + clock(game.time(0));
+        if (solved ? !MainActivity.dailyDate.isEmpty() : MainActivity.dailyMenu) lines[k++] = dateText(solved ? MainActivity.dailyDate : MainActivity.today());
+        lines[k] = text[S_NEW];
+        return lines;
+    }
+
     private void drawMenu(Canvas c) {
         c.drawColor(cDim);
         layoutMenu(getWidth(), getHeight());
@@ -598,21 +737,22 @@ final class BoardView extends View implements Runnable {
         fillRect(c, menuX, menuTop, menuX + menuW, bottom, cPanel, menuRowH * 0.3f);
         boolean solved = game.active && game.solved;
         float cx = menuX + menuW / 2;
+        String[] lines = titleTexts();
         float y = menuTop + menuRowH * 0.7f;
-        drawText(c, text[solved ? S_SOLVED : S_TITLE], cx, y, menuRowH * 0.5f, cKeyText, Typeface.DEFAULT_BOLD);
-        y += menuRowH * 0.6f;
-        if (solved) {
-            drawText(c, levelText() + "  " + clock(game.time(0)), cx, y, menuRowH * 0.38f, cAccent, Typeface.DEFAULT);
+        drawText(c, lines[0], cx, y, fit(lines[0], menuRowH * 0.5f, menuW * 0.9f), cKeyText, Typeface.DEFAULT_BOLD);
+        for (int k = 1; k < lines.length; k++) {
             y += menuRowH * 0.6f;
+            boolean result = solved && k == 1;
+            drawText(c, lines[k], cx, y, fit(lines[k], menuRowH * (result ? 0.38f : 0.34f), menuW * 0.9f), result ? cAccent : cMuted, Typeface.DEFAULT);
         }
-        drawText(c, text[S_NEW], cx, y, menuRowH * 0.34f, cMuted, Typeface.DEFAULT);
-        float side = menuRowH * 0.4f;
         float inset = menuRowH * 0.08f;
         for (int row = 0; row < menuRows; row++) {
-            float ry = menuRowY(row);
-            String label = menuLabel(row);
-            fillRect(c, menuX + side, ry + inset, menuX + menuW - side, ry + menuRowH - inset, cKey, menuRowH * 0.25f);
-            drawText(c, label, cx, ry + menuRowH / 2, fit(label, menuRowH * 0.4f, menuW * 0.8f), cKeyText, Typeface.DEFAULT);
+            for (int item = 0; item < menuSpec[row].length; item++) {
+                RectF r = menuItemRect(row, item);
+                String label = menuLabel(menuSpec[row][item]);
+                fillRect(c, r.left, r.top + inset, r.right, r.bottom - inset, cKey, menuRowH * 0.25f);
+                drawText(c, label, r.centerX(), r.centerY(), fit(label, menuRowH * 0.4f, r.width() * 0.9f), cKeyText, Typeface.DEFAULT);
+            }
         }
     }
 
@@ -621,8 +761,9 @@ final class BoardView extends View implements Runnable {
         float bottom = menuRowY(menuRows) + menuRowH * 0.4f;
         if (x < menuX || x > menuX + menuW || y < menuTop || y > bottom) return 499;
         for (int row = 0; row < menuRows; row++) {
-            float ry = menuRowY(row);
-            if (y >= ry && y < ry + menuRowH) return 400 + row;
+            for (int item = 0; item < menuSpec[row].length; item++) {
+                if (menuItemRect(row, item).contains(x, y)) return menuSpec[row][item];
+            }
         }
         return -1;
     }
@@ -634,6 +775,20 @@ final class BoardView extends View implements Runnable {
             game.showErrors = !game.showErrors;
             MainActivity.save();
             invalidate();
+        } else if (t == 408) {
+            MainActivity.showTimer = !MainActivity.showTimer;
+            MainActivity.prefs.edit().putString("t", MainActivity.showTimer ? "1" : "0").apply();
+            invalidate();
+        } else if (t == 409) {
+            MainActivity.dailyMenu = !MainActivity.dailyMenu;
+            invalidate();
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+        } else if (t == 411) {
+            statsOpen = true;
+            invalidate();
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+        } else if (t == 412 && game.active && game.solved) {
+            host.share(shareText());
         } else if (t == 406 && cancellable()) {
             game.restart();
             MainActivity.save();
@@ -643,13 +798,101 @@ final class BoardView extends View implements Runnable {
         }
     }
 
+    private String shareText() {
+        String result = levelText() + " \u00b7 " + clock(game.time(0));
+        if (!MainActivity.dailyDate.isEmpty()) return text[S_DAILY] + " " + dateText(MainActivity.dailyDate) + " \u00b7 " + result + "\n" + SITE + langPath() + "daily/";
+        return text[S_TITLE] + " \u00b7 " + result + "\n" + SITE + langPath() + "?p=" + digits(game.given);
+    }
+
+    float statsX;
+    float statsW;
+    float statsTop;
+    float statsRowH;
+    int statsLines;
+
+    private void layoutStats(int w, int h) {
+        float base = Math.min(w - insetL - insetR, h - insetT - insetB);
+        statsW = base * 0.9f;
+        statsLines = 0;
+        int[] a = MainActivity.stats();
+        for (int level = 0; level < Sudoku.LEVELS; level++) if (a[level * 4] > 0 || a[level * 4 + 1] > 0) statsLines++;
+        float rows = 1.4f + 1 + statsLines + 1.2f + 1.2f;
+        statsRowH = Math.min(base * 0.085f, (h - insetT - insetB) * 0.94f / rows);
+        float total = statsRowH * rows;
+        statsX = insetL + (w - insetL - insetR - statsW) / 2;
+        statsTop = insetT + (h - insetT - insetB - total) / 2;
+    }
+
+    private RectF statsCloseRect() {
+        float y = statsTop + statsRowH * (1.4f + 1 + statsLines + 1.2f);
+        float side = statsRowH * 0.4f;
+        return new RectF(statsX + side, y, statsX + statsW - side, y + statsRowH);
+    }
+
+    private String[] statsRow(int level, int[] a) {
+        int p = a[level * 4], s = a[level * 4 + 1], t = a[level * 4 + 2], b = a[level * 4 + 3];
+        return new String[] {levelName(level), s + " / " + p, b > 0 ? clock(b * 1000L) : "-", s > 0 ? clock(Math.round((double) t / s) * 1000L) : "-"};
+    }
+
+    private void drawStats(Canvas c) {
+        c.drawColor(cDim);
+        layoutStats(getWidth(), getHeight());
+        RectF close = statsCloseRect();
+        fillRect(c, statsX, statsTop, statsX + statsW, close.bottom + statsRowH * 0.4f, cPanel, statsRowH * 0.3f);
+        float cx = statsX + statsW / 2;
+        drawText(c, text[S_STATS], cx, statsTop + statsRowH * 0.75f, fit(text[S_STATS], statsRowH * 0.55f, statsW * 0.9f), cKeyText, Typeface.DEFAULT_BOLD);
+        float[] colX = {statsX + statsW * 0.2f, statsX + statsW * 0.45f, statsX + statsW * 0.66f, statsX + statsW * 0.86f};
+        float colW = statsW * 0.2f;
+        float y = statsTop + statsRowH * 1.4f + statsRowH / 2;
+        String[] head = {"", text[S_PLAYED], text[S_BEST], text[S_AVERAGE]};
+        for (int k = 1; k < 4; k++) drawText(c, head[k], colX[k], y, fit(head[k], statsRowH * 0.3f, colW), cMuted, Typeface.DEFAULT);
+        int[] a = MainActivity.stats();
+        for (int level = 0; level < Sudoku.LEVELS; level++) {
+            if (a[level * 4] == 0 && a[level * 4 + 1] == 0) continue;
+            y += statsRowH;
+            String[] cells = statsRow(level, a);
+            for (int k = 0; k < 4; k++) drawText(c, cells[k], colX[k], y, fit(cells[k], statsRowH * 0.38f, k == 0 ? statsW * 0.28f : colW), cKeyText, k == 0 ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        }
+        String streak = text[S_STREAK] + ": " + MainActivity.streak();
+        drawText(c, streak, cx, y + statsRowH * 1.1f, fit(streak, statsRowH * 0.38f, statsW * 0.9f), cMuted, Typeface.DEFAULT);
+        fillRect(c, close.left, close.top + statsRowH * 0.08f, close.right, close.bottom - statsRowH * 0.08f, cKey, statsRowH * 0.25f);
+        drawText(c, text[S_CANCEL], close.centerX(), close.centerY(), fit(text[S_CANCEL], statsRowH * 0.4f, close.width() * 0.9f), cKeyText, Typeface.DEFAULT);
+    }
+
+    private int statsTarget(float x, float y) {
+        layoutStats(getWidth(), getHeight());
+        RectF close = statsCloseRect();
+        if (close.contains(x, y)) return 431;
+        if (x < statsX || x > statsX + statsW || y < statsTop || y > close.bottom + statsRowH * 0.4f) return 431;
+        return 430;
+    }
+
+    private String statsSummary() {
+        StringBuilder sb = new StringBuilder(text[S_STATS]);
+        int[] a = MainActivity.stats();
+        for (int level = 0; level < Sudoku.LEVELS; level++) {
+            if (a[level * 4] == 0 && a[level * 4 + 1] == 0) continue;
+            String[] cells = statsRow(level, a);
+            sb.append(". ").append(cells[0]).append(": ").append(text[S_PLAYED]).append(' ').append(cells[1]).append(", ").append(text[S_BEST]).append(' ').append(cells[2]).append(", ").append(text[S_AVERAGE]).append(' ').append(cells[3]);
+        }
+        return sb.append(". ").append(text[S_STREAK]).append(": ").append(MainActivity.streak()).toString();
+    }
+
+    private void closeStats() {
+        statsOpen = false;
+        invalidate();
+        sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+    }
+
     private void startGame(int level) {
         if (MainActivity.pendingLevel >= 0) return;
         menuOpen = false;
+        statsOpen = false;
+        idle = false;
         game.pause(SystemClock.elapsedRealtime());
         removeCallbacks(this);
         wasGenerating = true;
-        host.generate(level);
+        host.generate(level, MainActivity.dailyMenu);
         invalidate();
         sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
@@ -664,9 +907,10 @@ final class BoardView extends View implements Runnable {
 
     private void closeMenu() {
         menuOpen = false;
-        game.resume(SystemClock.elapsedRealtime());
-        run();
-        invalidate();
+        statsOpen = false;
+        idle = false;
+        lastInput = SystemClock.elapsedRealtime();
+        resumeIfAllowed();
         sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
@@ -679,10 +923,14 @@ final class BoardView extends View implements Runnable {
         return game.rating > 0 ? name + " " + String.format(Locale.getDefault(), "%.1f", game.rating / 10.0) : name;
     }
 
-    private String menuLabel(int row) {
-        if (row < 5) return levelName(row);
-        if (row == 5) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
-        return text[row == 6 ? S_RESTART : S_CANCEL];
+    private String menuLabel(int id) {
+        if (id < 405) return levelName(id - 400);
+        if (id == 405) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
+        if (id == 408) return text[S_TIMER] + ": " + text[MainActivity.showTimer ? S_ON : S_OFF];
+        if (id == 409) return text[MainActivity.dailyMenu ? S_PLAY : S_DAILY];
+        if (id == 411) return text[S_STATS];
+        if (id == 412) return text[S_SHARE];
+        return text[id == 406 ? S_RESTART : S_CANCEL];
     }
 
     public AccessibilityNodeProvider getAccessibilityNodeProvider() {
@@ -705,8 +953,9 @@ final class BoardView extends View implements Runnable {
     int axTargetAt(float x, float y) {
         if (MainActivity.pendingLevel >= 0) return -1;
         if (overlay()) {
+            if (statsOpen) return statsTarget(x, y);
             int t = menuTarget(x, y);
-            return t >= 400 && t < 400 + menuRows ? t : -1;
+            return t >= 400 && t < 499 ? t : -1;
         }
         return target(x, y);
     }
@@ -724,10 +973,14 @@ final class BoardView extends View implements Runnable {
     int[] axTargets() {
         if (MainActivity.pendingLevel >= 0) return new int[] {420};
         if (overlay()) {
+            if (statsOpen) return new int[] {430, 431};
             layoutMenu(getWidth(), getHeight());
-            int[] ids = new int[menuRows + 1];
-            ids[0] = 410;
-            for (int row = 0; row < menuRows; row++) ids[row + 1] = 400 + row;
+            int n = 1;
+            for (int[] row : menuSpec) n += row.length;
+            int[] ids = new int[n];
+            int k = 0;
+            ids[k++] = 410;
+            for (int[] row : menuSpec) for (int id : row) ids[k++] = id;
             return ids;
         }
         boolean hint = game.active && game.hintActive();
@@ -743,22 +996,25 @@ final class BoardView extends View implements Runnable {
     }
 
     String axClass(int id) {
-        return id == 301 || id == 302 || id == 410 || id == 420 ? "android.widget.TextView" : "android.widget.Button";
+        return axClickable(id) ? "android.widget.Button" : "android.widget.TextView";
+    }
+
+    boolean axClickable(int id) {
+        if (id == 302) return explainable();
+        return id != 301 && id != 410 && id != 420 && id != 430;
     }
 
     String axLabel(int id) {
         if (id == 420) return text[S_PREPARING];
-        if (id == 410) {
-            boolean solved = game.active && game.solved;
-            String title = solved ? text[S_SOLVED] + " " + levelText() + " " + clock(game.time(0)) : text[S_TITLE];
-            return title + ". " + text[S_NEW];
-        }
-        if (id >= 400) return menuLabel(id - 400);
-        if (id == 301) return game.active ? levelText() + ", " + clock(game.time(SystemClock.elapsedRealtime())) : "";
+        if (id == 430) return statsSummary();
+        if (id == 431) return text[S_CANCEL];
+        if (id == 410) return String.join(". ", titleTexts());
+        if (id >= 400) return menuLabel(id);
+        if (id == 301) return game.active ? MainActivity.showTimer ? levelText() + ", " + clock(game.time(SystemClock.elapsedRealtime())) : levelText() : "";
         if (id == 300) return text[S_NEW];
         if (id == 302) {
             String message = hintMessage();
-            return game.hintKind == Game.HINT_PLACE ? message + ". " + text[S_AGAIN] : message;
+            return game.hintKind == Game.HINT_PLACE ? message + ". " + text[S_AGAIN] + ". " + text[S_EXPLAIN] : message;
         }
         if (id >= 200) return text[S_UNDO + id - 200];
         if (id >= 100) {
@@ -793,10 +1049,22 @@ final class BoardView extends View implements Runnable {
 
     Rect axRect(int id) {
         if (id == 420) return new Rect(0, 0, getWidth(), getHeight());
+        if (id == 430 || id == 431) {
+            layoutStats(getWidth(), getHeight());
+            RectF close = statsCloseRect();
+            if (id == 431) return new Rect((int) close.left, (int) close.top, (int) close.right, (int) close.bottom);
+            return new Rect((int) statsX, (int) statsTop, (int) (statsX + statsW), (int) close.top);
+        }
         if (id == 410) return new Rect((int) menuX, (int) menuTop, (int) (menuX + menuW), (int) (menuTop + menuTitleH));
         if (id >= 400) {
-            float ry = menuRowY(id - 400);
-            return new Rect((int) menuX, (int) ry, (int) (menuX + menuW), (int) (ry + menuRowH));
+            for (int row = 0; row < menuRows; row++) {
+                for (int item = 0; item < menuSpec[row].length; item++) {
+                    if (menuSpec[row][item] != id) continue;
+                    RectF r = menuItemRect(row, item);
+                    return new Rect((int) r.left, (int) r.top, (int) r.right, (int) r.bottom);
+                }
+            }
+            return new Rect();
         }
         if (id == 301) return new Rect((int) topX, (int) topY, (int) (topX + topW - topH * 0.9f), (int) (topY + topH));
         if (id == 300) return new Rect((int) (topX + topW - topH * 0.9f), (int) topY, (int) (topX + topW), (int) (topY + topH));
@@ -810,15 +1078,23 @@ final class BoardView extends View implements Runnable {
 
     void activate(int t) {
         if (MainActivity.pendingLevel >= 0 || t < 0) return;
+        input();
         if (overlay()) {
-            if (t >= 400) menuAction(t);
+            if (statsOpen) {
+                if (t == 431) closeStats();
+            } else if (t >= 400 && t != 410 && t != 420) menuAction(t);
             return;
         }
         if (t < 81) finish(game.tap(t));
         else if (t >= 100 && t <= 300) act(t);
+        else if (t == 302 && explainable()) act(t);
     }
 
     boolean back() {
+        if (statsOpen) {
+            closeStats();
+            return true;
+        }
         if (menuOpen && cancellable()) {
             closeMenu();
             return true;
