@@ -7,8 +7,10 @@
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
     S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
     S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7, S_DAILY, S_SHARE, S_PLAY, S_STATS, S_PLAYED, S_BEST, S_AVERAGE, S_STREAK,
-    S_EXPLAIN, S_TIMER };
-enum { IDLE_MS = 60000, MENU_MAX = 12 };
+    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER };
+enum { IDLE_MS = 60000, MENU_MAX = 12, TOOLS = 6 };
+static const uint32_t PALETTE_LIGHT[7] = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
+static const uint32_t PALETTE_DARK[7] = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -24,7 +26,7 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
     @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
-    @"Explain", @"Show timer"};
+    @"Explain", @"Show timer", @"Color", @"Corner"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -39,7 +41,7 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
     @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
-    @"Açıkla", @"Zamanlayıcıyı göster"};
+    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
@@ -191,15 +193,16 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
 @interface BoardView : UIView {
     NSString *const *text;
     BOOL dark;
-    UIColor *cBg, *cLine, *cThick, *cGiven, *cEntered, *cWrong, *cNote, *cUnit, *cSame, *cSelected, *cKey, *cKeyText, *cMuted, *cPanel, *cDim, *cAccent;
+    UIColor *cBg, *cLine, *cThick, *cGiven, *cEntered, *cWrong, *cNote, *cUnit, *cSame, *cSelected, *cKey, *cKeyText, *cMuted, *cPanel, *cDim, *cAccent, *cCorner;
+    UIColor *palette[7];
     CGFloat insetL, insetT, insetR, insetB;
     BOOL landscape;
     CGFloat boardX, boardY, boardSize, cell;
     CGFloat topX, topY, topW, topH;
     CGFloat msgX, msgY, msgW, msgH;
-    CGFloat toolX[5], toolY, toolW, toolH;
+    CGFloat toolX[TOOLS], toolY, toolW, toolH;
     CGFloat keyX[9], keyY[9], keyW, keyH;
-    BOOL menuOpen, wasGenerating, statsOpen, idle;
+    BOOL menuOpen, wasGenerating, statsOpen, idle, colorMode;
     int64_t lastInput;
     int downTarget;
     NSTimer *timer;
@@ -268,12 +271,15 @@ static BoardView *current;
         cEntered = rgb(0xFF8AB4F8); cWrong = rgb(0xFFF28B82); cNote = rgb(0xFFA0A0A0); cUnit = rgb(0xFF1E2430);
         cSame = rgb(0xFF2B3A55); cSelected = rgb(0xFF3B5A8A); cKey = rgb(0xFF1F1F1F); cKeyText = rgb(0xFFF0F0F0);
         cMuted = rgb(0xFF707070); cPanel = rgb(0xFF1F1F1F); cDim = rgb(0x99000000); cAccent = rgb(0xFF8AB4F8);
+        cCorner = rgb(0xFFFFAB70);
     } else {
         cBg = rgb(0xFFFFFFFF); cLine = rgb(0xFFD0D0D0); cThick = rgb(0xFF303030); cGiven = rgb(0xFF202124);
         cEntered = rgb(0xFF1A73E8); cWrong = rgb(0xFFD93025); cNote = rgb(0xFF5F6368); cUnit = rgb(0xFFEEF3FC);
         cSame = rgb(0xFFD2E3FC); cSelected = rgb(0xFFAECBFA); cKey = rgb(0xFFF1F3F4); cKeyText = rgb(0xFF202124);
         cMuted = rgb(0xFF9AA0A6); cPanel = rgb(0xFFFFFFFF); cDim = rgb(0x66000000); cAccent = rgb(0xFF1A73E8);
+        cCorner = rgb(0xFFC2410C);
     }
+    for (int k = 1; k <= GAME_COLORS; k++) palette[k] = rgb(dark ? PALETTE_DARK[k] : PALETTE_LIGHT[k]);
     self.backgroundColor = cBg;
 }
 
@@ -314,8 +320,8 @@ static BoardView *current;
         CGFloat pw = left + cw - pad - px;
         topX = px; topW = pw; topY = boardY; topH = boardSize * 0.11;
         msgX = px; msgW = pw; msgY = topY + topH + pad; msgH = boardSize * 0.11;
-        toolW = pw / 5; toolH = boardSize * 0.2; toolY = msgY + msgH + pad;
-        for (int i = 0; i < 5; i++) toolX[i] = px + i * toolW;
+        toolW = pw / TOOLS; toolH = boardSize * 0.2; toolY = msgY + msgH + pad;
+        for (int i = 0; i < TOOLS; i++) toolX[i] = px + i * toolW;
         CGFloat ky = toolY + toolH + pad;
         keyW = pw / 3;
         keyH = (boardY + boardSize - ky) / 3;
@@ -335,8 +341,8 @@ static BoardView *current;
         boardY = topY + topH + gap;
         msgX = boardX; msgW = boardSize; msgY = boardY + boardSize + gap;
         toolY = msgY + msgH + gap;
-        toolW = boardSize / 5;
-        for (int i = 0; i < 5; i++) toolX[i] = boardX + i * toolW;
+        toolW = boardSize / TOOLS;
+        for (int i = 0; i < TOOLS; i++) toolX[i] = boardX + i * toolW;
         keyW = boardSize / 9;
         for (int i = 0; i < 9; i++) {
             keyX[i] = boardX + i * keyW;
@@ -388,7 +394,8 @@ static BoardView *current;
     for (int i = 0; i < 81; i++) {
         UIColor *color = nil;
         if (i == sel) color = cSelected;
-        else if (selValue != 0 && (game.value[i] == selValue || (game.value[i] == 0 && (game.notes[i] & selBit) != 0))) color = cSame;
+        else if (game.color[i] != 0) color = palette[game.color[i]];
+        else if (selValue != 0 && (game.value[i] == selValue || (game.value[i] == 0 && ((game.notes[i] | game.corner[i]) & selBit) != 0))) color = cSame;
         else if (sel >= 0 && sudoku_sees(i, sel)) color = cUnit;
         if (!color) continue;
         CGFloat x = boardX + SUDOKU_COL[i] * cell;
@@ -403,15 +410,17 @@ static BoardView *current;
             BOOL given = game.given[i] != 0;
             UIColor *color = game_conflict(&game, i) || game_wrong(&game, i) ? cWrong : given ? cGiven : cEntered;
             drawText(DIGITS[v], cx, cy, cell * 0.62, color, given ? 1 : 0);
-        } else if (game.notes[i] != 0) {
+        } else if ((game.notes[i] | game.corner[i]) != 0) {
             CGFloat x0 = boardX + SUDOKU_COL[i] * cell;
             CGFloat y0 = boardY + SUDOKU_ROW[i] * cell;
             for (int d = 1; d <= 9; d++) {
-                if ((game.notes[i] & sudoku_bit(d)) == 0) continue;
+                int b = sudoku_bit(d);
+                if (((game.notes[i] | game.corner[i]) & b) == 0) continue;
                 CGFloat nx = x0 + ((d - 1) % 3 + 0.5) * cell / 3;
                 CGFloat ny = y0 + ((d - 1) / 3 + 0.5) * cell / 3;
                 BOOL same = d == selValue;
-                drawText(DIGITS[d], nx, ny, cell * 0.28, same ? cEntered : cNote, same ? 1 : 0);
+                BOOL corner = (game.corner[i] & b) != 0;
+                drawText(DIGITS[d], nx, ny, cell * 0.28, same ? cEntered : corner ? cCorner : cNote, same || corner ? 1 : 0);
             }
         }
     }
@@ -435,6 +444,12 @@ static BoardView *current;
     for (int d = 1; d <= 9; d++) {
         CGFloat x = keyX[d - 1];
         CGFloat y = keyY[d - 1];
+        if (colorMode) {
+            BOOL usable = d <= 7 && game.selected >= 0;
+            fillRect(x + inset, y + inset, x + keyW - inset, y + keyH - inset, d <= 6 ? palette[d] : d == 7 ? cKey : cBg, keyW * 0.15);
+            if (d <= 7) drawText(d <= 6 ? DIGITS[d] : @"\u00d7", x + keyW / 2, y + keyH / 2, keyH * 0.42, usable ? cKeyText : cMuted, 0);
+            continue;
+        }
         BOOL on = d == game.sticky;
         fillRect(x + inset, y + inset, x + keyW - inset, y + keyH - inset, on ? cAccent : cKey, keyW * 0.15);
         int left = game.active ? MAX(0, game_remaining(&game, d)) : 9;
@@ -451,7 +466,7 @@ static BoardView *current;
     for (int i = 0; i < 9; i++) {
         if (x >= keyX[i] && x < keyX[i] + keyW && y >= keyY[i] && y < keyY[i] + keyH) return 100 + i;
     }
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < TOOLS; i++) {
         if (x >= toolX[i] && x < toolX[i] + toolW && y >= toolY && y < toolY + toolH) return 200 + i;
     }
     if (x >= topX && x < topX + topW && y >= topY && y < topY + topH) return 300;
@@ -531,10 +546,18 @@ static BoardView *current;
 
 - (void)act:(int)t {
     BOOL changed = NO;
-    if (t >= 100 && t < 109) changed = game_key(&game, t - 99);
+    if (t >= 100 && t < 109 && colorMode) changed = t - 99 <= 7 && game_paint(&game, t - 99 <= 6 ? t - 99 : 0);
+    else if (t >= 100 && t < 109) changed = game_key(&game, t - 99);
     else if (t == 200) changed = game_undo(&game);
-    else if (t == 201) changed = game_erase(&game);
-    else if (t == 202) game.noteMode = !game.noteMode;
+    else if (t == 201) changed = colorMode ? game_paint(&game, 0) : game_erase(&game);
+    else if (t == 202) {
+        game_cycle_notes(&game);
+        changed = YES;
+    } else if (t == 205) {
+        colorMode = !colorMode;
+        game.sticky = 0;
+        changed = YES;
+    }
     else if (t == 203) changed = game_fill_notes(&game);
     else if (t == 204) changed = game_hint(&game, &engine);
     else if (t == 300) {
@@ -547,7 +570,7 @@ static BoardView *current;
 #endif
         return;
     }
-    [self finish:changed || t == 202];
+    [self finish:changed];
 }
 
 - (void)finish:(BOOL)changed {
@@ -693,6 +716,16 @@ static BoardView *current;
             [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(cx + (k % 3 - 1) * s * 0.5 - r, cy + (k / 3 - 1) * s * 0.5 - r, 2 * r, 2 * r)] fill];
         }
         return;
+    } else if (kind == 5) {
+        CGContextAddEllipseInRect(c, CGRectMake(cx - s * 0.62, cy - s * 0.62, s * 1.24, s * 1.24));
+        CGContextStrokePath(c);
+        [color setFill];
+        CGFloat dots[3][2] = {{-0.25, -0.18}, {0.08, -0.32}, {0.3, 0.05}};
+        for (int k = 0; k < 3; k++) {
+            CGFloat r = s * 0.11;
+            [[UIBezierPath bezierPathWithOvalInRect:CGRectMake(cx + dots[k][0] * s - r, cy + dots[k][1] * s - r, 2 * r, 2 * r)] fill];
+        }
+        return;
     } else {
         CGContextAddEllipseInRect(c, CGRectMake(cx - s * 0.45, cy - s * 0.15 - s * 0.45, s * 0.9, s * 0.9));
         CGContextStrokePath(c);
@@ -704,16 +737,24 @@ static BoardView *current;
     CGContextStrokePath(c);
 }
 
+- (NSString *)toolLabel:(int)i {
+    if (i == 5) return text[S_COLOR];
+    if (i == 2 && game.noteMode && game.cornerMode) return text[S_CORNER];
+    return text[S_UNDO + i];
+}
+
 - (void)drawTools {
     CGFloat inset = toolW * 0.06;
-    for (int i = 0; i < 5; i++) {
+    BOOL playable = game.active && !game.solved;
+    if (!playable) colorMode = NO;
+    for (int i = 0; i < TOOLS; i++) {
         CGFloat x = toolX[i];
-        BOOL on = (i == 2 && game.noteMode) || (i == 4 && game.active && game_hint_active(&game) && game.hintKind == HINT_PLACE);
-        BOOL enabled = game.active && !game.solved && (i != 0 || game.histCount > 0);
+        BOOL on = (i == 2 && game.noteMode) || (i == 4 && game.active && game_hint_active(&game) && game.hintKind == HINT_PLACE) || (i == 5 && colorMode);
+        BOOL enabled = playable && (i != 0 || game.histCount > 0);
         fillRect(x + inset, toolY + inset, x + toolW - inset, toolY + toolH - inset, on ? cSame : cKey, toolW * 0.15);
-        UIColor *color = !enabled ? cMuted : on ? cAccent : cKeyText;
+        UIColor *color = !enabled ? cMuted : i == 2 && game.cornerMode ? cCorner : on ? cAccent : cKeyText;
         [self drawIcon:i cx:x + toolW / 2 cy:toolY + toolH * 0.38 size:toolH * 0.3 color:color];
-        NSString *label = text[S_UNDO + i];
+        NSString *label = [self toolLabel:i];
         drawText(label, x + toolW / 2, toolY + toolH * 0.78, fit(label, toolH * 0.17, toolW * 0.88), color, 0);
     }
 }
@@ -1064,7 +1105,7 @@ static BoardView *current;
 - (CGRect)targetRect:(int)t {
     if (t < 81) return CGRectMake(boardX + SUDOKU_COL[t] * cell, boardY + SUDOKU_ROW[t] * cell, cell, cell);
     if (t < 109) return CGRectMake(keyX[t - 100], keyY[t - 100], keyW, keyH);
-    if (t < 205) return CGRectMake(toolX[t - 200], toolY, toolW, toolH);
+    if (t < 200 + TOOLS) return CGRectMake(toolX[t - 200], toolY, toolW, toolH);
     return CGRectMake(topX + topW - topH * 0.9, topY, topH * 0.9, topH);
 }
 
@@ -1074,7 +1115,7 @@ static BoardView *current;
     int best = from;
     CGFloat bestScore = 1e9;
     for (int t = 0; t <= 300; t++) {
-        if (t == from || (t > 80 && t < 100) || (t > 108 && t < 200) || (t > 204 && t < 300)) continue;
+        if (t == from || (t > 80 && t < 100) || (t > 108 && t < 200) || (t >= 200 + TOOLS && t < 300)) continue;
         CGRect b = [self targetRect:t];
         CGFloat dx = CGRectGetMidX(b) - ax, dy = CGRectGetMidY(b) - ay;
         CGFloat primary = dir == 0 ? -dy : dir == 1 ? dy : dir == 2 ? -dx : dx;
@@ -1131,6 +1172,7 @@ static BoardView *current;
         else if (u == UIKeyboardHIDUsageKeyboardN) tool = 202;
         else if (u == UIKeyboardHIDUsageKeyboardF) tool = 203;
         else if (u == UIKeyboardHIDUsageKeyboardH) tool = 204;
+        else if (u == UIKeyboardHIDUsageKeyboardC) tool = 205;
         else if (u == UIKeyboardHIDUsageKeyboardEscape) escape = YES;
         else if (u == UIKeyboardHIDUsageKeyboardReturnOrEnter || u == UIKeyboardHIDUsageKeyboardSpacebar) select = YES;
         else return NO;
@@ -1180,7 +1222,8 @@ static BoardView *current;
         return YES;
     }
     if (escape) {
-        if (game.sticky) [self act:99 + game.sticky];
+        if (colorMode) [self act:205];
+        else if (game.sticky) [self act:99 + game.sticky];
         else [self openMenu];
         return YES;
     }
@@ -1257,12 +1300,22 @@ static BoardView *current;
     int v = game.value[i];
     if (v != 0) {
         BOOL wrong = game_conflict(&game, i) || game_wrong(&game, i);
-        return wrong ? [NSString stringWithFormat:@"%@, %@", DIGITS[v], text[S_WRONG]] : DIGITS[v];
+        NSString *digit = wrong ? [NSString stringWithFormat:@"%@, %@", DIGITS[v], text[S_WRONG]] : DIGITS[v];
+        return game.color[i] ? [NSString stringWithFormat:@"%@, %@ %d", digit, text[S_COLOR], game.color[i]] : digit;
     }
-    if (game.notes[i] == 0) return nil;
-    NSMutableString *notes = [NSMutableString stringWithString:text[S_NOTE]];
-    for (int d = 1; d <= 9; d++) if (game.notes[i] & sudoku_bit(d)) [notes appendFormat:@" %d", d];
-    return notes;
+    NSMutableArray *parts = [NSMutableArray array];
+    if (game.notes[i] != 0) {
+        NSMutableString *notes = [NSMutableString stringWithString:text[S_NOTE]];
+        for (int d = 1; d <= 9; d++) if (game.notes[i] & sudoku_bit(d)) [notes appendFormat:@" %d", d];
+        [parts addObject:notes];
+    }
+    if (game.corner[i] != 0) {
+        NSMutableString *corner = [NSMutableString stringWithString:text[S_CORNER]];
+        for (int d = 1; d <= 9; d++) if (game.corner[i] & sudoku_bit(d)) [corner appendFormat:@" %d", d];
+        [parts addObject:corner];
+    }
+    if (game.color[i] != 0) [parts addObject:[NSString stringWithFormat:@"%@ %d", text[S_COLOR], game.color[i]]];
+    return parts.count ? [parts componentsJoinedByString:@", "] : nil;
 }
 
 - (NSArray *)accessibilityElements {
@@ -1307,6 +1360,13 @@ static BoardView *current;
         [list addObject:[self axElement:i frame:[self targetRect:i] label:label value:game.active ? [self cellValue:i] : nil traits:traits]];
     }
     for (int d = 1; d <= 9; d++) {
+        if (colorMode) {
+            UIAccessibilityTraits traits = UIAccessibilityTraitButton;
+            if (!playable || d > 7 || game.selected < 0) traits |= UIAccessibilityTraitNotEnabled;
+            NSString *label = d <= 6 ? [NSString stringWithFormat:@"%@ %d", text[S_COLOR], d] : d == 7 ? text[S_ERASE] : @"";
+            [list addObject:[self axElement:99 + d frame:[self targetRect:99 + d] label:label value:nil traits:traits]];
+            continue;
+        }
         int left = game.active ? MAX(0, game_remaining(&game, d)) : 9;
         UIAccessibilityTraits traits = UIAccessibilityTraitButton;
         if (d == game.sticky) traits |= UIAccessibilityTraitSelected;
@@ -1314,13 +1374,13 @@ static BoardView *current;
         NSString *value = [text[S_LEFT] stringByReplacingOccurrencesOfString:@"#" withString:[NSString stringWithFormat:@"%d", left]];
         [list addObject:[self axElement:99 + d frame:[self targetRect:99 + d] label:DIGITS[d] value:value traits:traits]];
     }
-    for (int i = 0; i < 5; i++) {
-        BOOL on = (i == 2 && game.noteMode) || (i == 4 && game.active && game_hint_active(&game) && game.hintKind == HINT_PLACE);
+    for (int i = 0; i < TOOLS; i++) {
+        BOOL on = (i == 2 && game.noteMode) || (i == 4 && game.active && game_hint_active(&game) && game.hintKind == HINT_PLACE) || (i == 5 && colorMode);
         BOOL enabled = playable && (i != 0 || game.histCount > 0);
         UIAccessibilityTraits traits = UIAccessibilityTraitButton;
         if (on) traits |= UIAccessibilityTraitSelected;
         if (!enabled) traits |= UIAccessibilityTraitNotEnabled;
-        [list addObject:[self axElement:200 + i frame:[self targetRect:200 + i] label:text[S_UNDO + i] value:nil traits:traits]];
+        [list addObject:[self axElement:200 + i frame:[self targetRect:200 + i] label:[self toolLabel:i] value:nil traits:traits]];
     }
     return list;
 }
