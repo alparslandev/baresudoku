@@ -12,11 +12,14 @@ Play in the browser at [baresudoku.com](https://baresudoku.com) (separate projec
 - Notes, undo, erase, fill all notes (tap again to clear them), restart the same puzzle, and hints that explain the reasoning and name the technique, from singles, locked candidates, pairs and triples and the fish and wing patterns up to chains, almost locked sets and forcing nets at Master level.
 - Digit-first entry: tap a digit key twice (or once with nothing selected) to lock it, then tap cells to place it. Cell-first entry works as usual.
 - Row, column, box and same-digit highlights, mistake marking (can be turned off), automatic save, dark mode, landscape layout.
+- Corner notes (the notes button switches between center and corner notes) and six cell colors for marking patterns.
+- A daily puzzle, the same one as on the web, statistics per level with a daily streak, sharing a solved puzzle, and an Explain button on hints that opens the step-by-step solver at baresudoku.com with the current board.
+- A clock you can hide; it pauses after a minute without input and when the app loses focus.
 - English and Turkish, following the system language.
 
 ## Android (`android/`)
 
-Plain Java, no Gradle. APK about 25 KB, Android 8 and newer. Needs Android SDK build-tools 36.0.0, platform 36 and JDK 17.
+Plain Java, no Gradle. APK about 54 KB, Android 8 and newer. Needs Android SDK build-tools 36.0.0, platform 36 and JDK 17.
 
 ```sh
 android/build.sh   # android/build/baresudoku.apk, prints the size in bytes
