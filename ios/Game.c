@@ -8,43 +8,6 @@ void game_init(Game *g) {
     g->showErrors = 1;
     g->selected = GAME_NONE;
     g->hintCell = GAME_NONE;
-    game_set_shape(g, NULL);
-}
-
-void game_set_shape(Game *g, const VariantShape *shape) {
-    g->size = shape == NULL ? 81 : shape->size;
-    g->n = shape == NULL ? 9 : shape->n;
-    g->all = shape == NULL ? SUDOKU_ALL : shape->all;
-    g->shaped = shape != NULL;
-    if (shape == NULL) return;
-    for (int c = 0; c < shape->size; c++) {
-        g->peerCount[c] = shape->peerCount[c];
-        for (int k = 0; k < shape->peerCount[c]; k++) g->peers[c][k] = shape->peerCells[c * VARIANT_MAX_PEERS + k];
-    }
-}
-
-static const int *peersOf(const Game *g, int cell, int *count) {
-    if (!g->shaped) {
-        *count = 20;
-        return SUDOKU_PEERS[cell];
-    }
-    *count = g->peerCount[cell];
-    return g->peers[cell];
-}
-
-int game_candidates(const Game *g, int cell) {
-    int count;
-    const int *peers = peersOf(g, cell, &count);
-    int used = 0;
-    for (int k = 0; k < count; k++) if (g->value[peers[k]] != 0) used |= sudoku_bit(g->value[peers[k]]);
-    return g->all & ~used;
-}
-
-int game_sees(const Game *g, int a, int b) {
-    int count;
-    const int *peers = peersOf(g, a, &count);
-    for (int k = 0; k < count; k++) if (peers[k] == b) return 1;
-    return 0;
 }
 
 void game_free(Game *g) {
@@ -78,10 +41,8 @@ void game_restart(Game *g) {
 }
 
 void game_start(Game *g, const int *puzzle, const int *full, int level) {
-    memset(g->given, 0, sizeof(g->given));
-    memset(g->solution, 0, sizeof(g->solution));
-    memcpy(g->given, puzzle, sizeof(int) * (size_t)g->size);
-    memcpy(g->solution, full, sizeof(int) * (size_t)g->size);
+    memcpy(g->given, puzzle, sizeof(g->given));
+    memcpy(g->solution, full, sizeof(g->solution));
     g->level = level;
     g->rating = 0;
     g->active = 1;
@@ -127,15 +88,15 @@ static int commit(Game *g) {
 }
 
 static void checkSolved(Game *g) {
-    for (int i = 0; i < g->size; i++) if (g->value[i] != g->solution[i]) return;
+    for (int i = 0; i < 81; i++) if (g->value[i] != g->solution[i]) return;
     g->solved = 1;
     g->selected = GAME_NONE;
 }
 
 int game_remaining(const Game *g, int d) {
-    int left = g->n;
-    for (int i = 0; i < g->size; i++) if (g->value[i] == d) left--;
-    return left;
+    int n = 9;
+    for (int i = 0; i < 81; i++) if (g->value[i] == d) n--;
+    return n;
 }
 
 int game_enter(Game *g, int d) {
@@ -157,10 +118,8 @@ int game_enter(Game *g, int d) {
     g->notes[c] = 0;
     g->corner[c] = 0;
     int b = sudoku_bit(d);
-    int count;
-    const int *peers = peersOf(g, c, &count);
-    for (int k = 0; k < count; k++) {
-        int p = peers[k];
+    for (int k = 0; k < 20; k++) {
+        int p = SUDOKU_PEERS[c][k];
         if (((g->notes[p] | g->corner[p]) & b) != 0) {
             touch(g, p);
             g->notes[p] &= ~b;
@@ -174,7 +133,6 @@ int game_enter(Game *g, int d) {
 }
 
 int game_key(Game *g, int d) {
-    if (d < 1 || d > g->n) return 0;
     if (g->sticky == 0 && game_can_edit(g) && (g->noteMode ? g->value[g->selected] == 0 : g->value[g->selected] != d)) return game_enter(g, d);
     g->sticky = g->sticky == d || game_remaining(g, d) <= 0 ? 0 : d;
     if (g->sticky != 0) g->selected = GAME_NONE;
@@ -220,9 +178,7 @@ int game_paint(Game *g, int k) {
 int game_conflict(const Game *g, int cell) {
     int v = g->value[cell];
     if (v == 0) return 0;
-    int count;
-    const int *peers = peersOf(g, cell, &count);
-    for (int k = 0; k < count; k++) if (g->value[peers[k]] == v) return 1;
+    for (int k = 0; k < 20; k++) if (g->value[SUDOKU_PEERS[cell][k]] == v) return 1;
     return 0;
 }
 
@@ -266,16 +222,16 @@ int game_undo(Game *g) {
 
 int game_fill_notes(Game *g) {
     if (!g->active || g->solved) return 0;
-    for (int i = 0; i < g->size; i++) {
+    for (int i = 0; i < 81; i++) {
         if (g->value[i] != 0) continue;
-        int m = game_candidates(g, i);
+        int m = sudoku_candidates(g->value, i);
         if (g->notes[i] != m) {
             touch(g, i);
             g->notes[i] = m;
         }
     }
     if (commit(g)) return 1;
-    for (int i = 0; i < g->size; i++) {
+    for (int i = 0; i < 81; i++) {
         if (g->value[i] == 0 && g->notes[i] != 0) {
             touch(g, i);
             g->notes[i] = 0;
@@ -288,9 +244,7 @@ int game_hint_active(const Game *g) {
     return g->hintKind != HINT_NONE && g->active && !g->solved && g->histCount == g->hintMoves && g->selected == g->hintCell;
 }
 
-#define HINT_ASK (-1)
-
-static int hintBeforeSolver(Game *g) {
+int game_hint(Game *g, Sudoku *engine) {
     if (!g->active || g->solved) return 0;
     g->sticky = 0;
     if (game_hint_active(g) && g->hintKind == HINT_PLACE && g->value[g->hintCell] == 0) {
@@ -300,7 +254,7 @@ static int hintBeforeSolver(Game *g) {
         return game_enter(g, g->hintDigit);
     }
     g->hintKind = HINT_NONE;
-    for (int i = 0; i < g->size; i++) {
+    for (int i = 0; i < 81; i++) {
         if (g->given[i] == 0 && g->value[i] != 0 && g->value[i] != g->solution[i]) {
             g->hintKind = HINT_WRONG;
             g->hintCell = i;
@@ -309,38 +263,23 @@ static int hintBeforeSolver(Game *g) {
             return 1;
         }
     }
-    return HINT_ASK;
-}
-
-static int showHint(Game *g, int cell, int digit, int tech, int unit) {
+    if (!sudoku_hint(engine, g->value, g->given)) return 0;
     g->hintKind = HINT_PLACE;
-    g->hintCell = cell;
-    g->hintDigit = digit;
-    g->hintTech = tech;
-    g->hintUnit = unit;
+    g->hintCell = engine->stepCell;
+    g->hintDigit = engine->stepDigit;
+    g->hintTech = engine->hintTech;
+    g->hintUnit = engine->stepUnit;
     g->selected = g->hintCell;
     g->hintMoves = g->histCount;
     return 1;
 }
 
-int game_hint(Game *g, Sudoku *engine) {
-    int done = hintBeforeSolver(g);
-    if (done != HINT_ASK) return done;
-    return sudoku_hint(engine, g->value, g->given) && showHint(g, engine->stepCell, engine->stepDigit, engine->hintTech, engine->stepUnit);
+static void appendDigits(char **p, const int *a) {
+    for (int i = 0; i < 81; i++) *(*p)++ = (char)('0' + a[i]);
 }
 
-int game_hint_variant(Game *g, Variant *v) {
-    int done = hintBeforeSolver(g);
-    if (done != HINT_ASK) return done;
-    return variant_hint(v, g->value, g->given) && showHint(g, v->stepCell, v->stepDigit, v->hintTech, v->stepUnit);
-}
-
-static void appendDigits(char **p, const int *a, int size) {
-    for (int i = 0; i < size; i++) *(*p)++ = (char)('0' + a[i]);
-}
-
-static void appendMasks(char **p, const int *masks, int size) {
-    for (int i = 0; i < size; i++) {
+static void appendMasks(char **p, const int *masks) {
+    for (int i = 0; i < 81; i++) {
         int m = masks[i];
         *(*p)++ = (char)('0' + (m >> 6));
         *(*p)++ = (char)('0' + ((m >> 3) & 7));
@@ -354,13 +293,13 @@ char *game_encode(const Game *g, int64_t now) {
     char *p = out;
     p += sprintf(p, "%d|%d|%d|%d|%d|%d|%lld|", g->active ? 1 : 0, g->level, g->solved ? 1 : 0,
         g->showErrors ? 1 : 0, g->noteMode ? 1 : 0, g->selected, (long long)game_time(g, now));
-    appendDigits(&p, g->given, g->size);
+    appendDigits(&p, g->given);
     *p++ = '|';
-    appendDigits(&p, g->solution, g->size);
+    appendDigits(&p, g->solution);
     *p++ = '|';
-    appendDigits(&p, g->value, g->size);
+    appendDigits(&p, g->value);
     *p++ = '|';
-    appendMasks(&p, g->notes, g->size);
+    appendMasks(&p, g->notes);
     p += sprintf(p, "|%d", g->histCount);
     for (int r = 0; r < g->histCount; r++) {
         int start = g->recStart[r];
@@ -372,25 +311,24 @@ char *game_encode(const Game *g, int64_t now) {
         }
     }
     *p++ = '|';
-    appendMasks(&p, g->corner, g->size);
+    appendMasks(&p, g->corner);
     *p++ = '|';
-    appendDigits(&p, g->color, g->size);
+    appendDigits(&p, g->color);
     p += sprintf(p, "|%d", g->cornerMode ? 1 : 0);
     *p = 0;
     return out;
 }
 
-static int readMasks(const Game *g, const char *s, int *masks) {
-    if (strlen(s) != (size_t)g->size * 3) return 0;
-    memset(masks, 0, sizeof(int) * 81);
-    for (int i = 0; i < g->size; i++) {
+static int readMasks(const char *s, int *masks) {
+    if (strlen(s) != 243) return 0;
+    for (int i = 0; i < 81; i++) {
         int m = 0;
         for (int k = 0; k < 3; k++) {
             int o = s[i * 3 + k] - '0';
             if (o < 0 || o > 7) return 0;
             m = (m << 3) | o;
         }
-        masks[i] = m & g->all;
+        masks[i] = m;
     }
     return 1;
 }
@@ -404,10 +342,9 @@ static int parseInt(const char *s, int *out) {
     return 1;
 }
 
-static int readDigits(const Game *g, const char *s, int *a) {
-    if (strlen(s) != (size_t)g->size) return 0;
-    memset(a, 0, sizeof(int) * 81);
-    for (int i = 0; i < g->size; i++) {
+static int readDigits(const char *s, int *a) {
+    if (strlen(s) != 81) return 0;
+    for (int i = 0; i < 81; i++) {
         int v = s[i] - '0';
         if (v < 0 || v > 9) return 0;
         a[i] = v;
@@ -441,9 +378,9 @@ int game_decode(Game *g, const char *text) {
         time = strtoll(f[6], &end, 10);
         if (*f[6] == 0 || *end != 0) goto done;
     }
-    if (lvl < 0 || lvl >= SUDOKU_LEVELS || sel < GAME_NONE || sel >= g->size || time < 0) goto done;
-    if (!readDigits(g, f[7], g->given) || !readDigits(g, f[8], g->solution) || !readDigits(g, f[9], g->value)) goto done;
-    if (!readMasks(g, f[10], g->notes)) goto done;
+    if (lvl < 0 || lvl >= SUDOKU_LEVELS || sel < GAME_NONE || sel > 80 || time < 0) goto done;
+    if (!readDigits(f[7], g->given) || !readDigits(f[8], g->solution) || !readDigits(f[9], g->value)) goto done;
+    if (!readMasks(f[10], g->notes)) goto done;
     if (!parseInt(f[11], &count) || count < 0) goto done;
     int extended = n == 15 + count;
     if (!extended && n != 12 + count) goto done;
@@ -464,7 +401,7 @@ int game_decode(Game *g, const char *text) {
         int qlen = 0;
         for (int i = 0; i < len; i += width) {
             int cornerMask = extended ? values[i + 3] : 0;
-            if (values[i] < 0 || values[i] >= g->size || values[i + 1] < 0 || values[i + 1] > g->n || values[i + 2] < 0 || values[i + 2] > g->all || cornerMask < 0 || cornerMask > g->all || qlen + 4 > 324) goto done;
+            if (values[i] < 0 || values[i] > 80 || values[i + 1] < 0 || values[i + 1] > 9 || values[i + 2] < 0 || values[i + 2] > SUDOKU_ALL || cornerMask < 0 || cornerMask > SUDOKU_ALL || qlen + 4 > 324) goto done;
             quads[qlen++] = values[i];
             quads[qlen++] = values[i + 1];
             quads[qlen++] = values[i + 2];
@@ -476,8 +413,8 @@ int game_decode(Game *g, const char *text) {
     memset(g->color, 0, sizeof(g->color));
     g->cornerMode = 0;
     if (extended) {
-        if (!readMasks(g, f[12 + count], g->corner) || !readDigits(g, f[13 + count], g->color)) goto done;
-        for (int i = 0; i < g->size; i++) if (g->color[i] > GAME_COLORS) goto done;
+        if (!readMasks(f[12 + count], g->corner) || !readDigits(f[13 + count], g->color)) goto done;
+        for (int i = 0; i < 81; i++) if (g->color[i] > GAME_COLORS) goto done;
         g->cornerMode = strcmp(f[14 + count], "1") == 0;
     }
     g->recordLength = 0;

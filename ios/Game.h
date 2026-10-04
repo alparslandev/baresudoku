@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include "Sudoku.h"
-#include "Variant.h"
 
 #define GAME_NONE (-1)
 #define HINT_NONE 0
@@ -44,19 +43,10 @@ typedef struct Game {
     int hintTech;
     int hintUnit;
     int hintMoves;
-    int size;
-    int n;
-    int all;
-    int shaped;
-    int peerCount[81];
-    int peers[81][VARIANT_MAX_PEERS];
 } Game;
 
 void game_init(Game *g);
 void game_free(Game *g);
-void game_set_shape(Game *g, const VariantShape *shape);
-int game_candidates(const Game *g, int cell);
-int game_sees(const Game *g, int a, int b);
 void game_start(Game *g, const int *puzzle, const int *full, int level);
 void game_restart(Game *g);
 int game_can_edit(const Game *g);
@@ -69,7 +59,6 @@ int game_undo(Game *g);
 int game_fill_notes(Game *g);
 int game_hint_active(const Game *g);
 int game_hint(Game *g, Sudoku *engine);
-int game_hint_variant(Game *g, Variant *v);
 int game_key(Game *g, int d);
 int game_tap(Game *g, int cell);
 int game_conflict(const Game *g, int cell);

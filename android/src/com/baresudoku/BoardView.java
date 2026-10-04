@@ -3,7 +3,6 @@ package com.baresudoku;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
@@ -59,13 +58,6 @@ final class BoardView extends View implements Runnable {
     static final int S_TIMER = S_MASTER + 10;
     static final int S_COLOR = S_MASTER + 11;
     static final int S_CORNER = S_MASTER + 12;
-    static final int S_VARIANTS = S_MASTER + 13;
-    static final int S_DIAG = S_MASTER + 14;
-    static final int S_REVEAL = S_MASTER + 15;
-    static final int S_CAGE = S_MASTER + 16;
-    static final int S_VARIANT_NAME = S_MASTER + 17;
-    static final int[] VARIANT_ORDER = {Variant.KIND_KILLER, Variant.KIND_DIAGONAL, Variant.KIND_MINI};
-    static final String[] VARIANT_PATHS = {"diagonal/", "killer/", "mini/"};
     static final int[] PALETTE_LIGHT = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
     static final int[] PALETTE_DARK = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
     static final int TOOLS = 6;
@@ -85,8 +77,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master",
         "Daily Sudoku", "Share", "Play Sudoku", "Statistics", "Solved", "Best time", "Average time", "Daily streak",
-        "Explain", "Show timer", "Color", "Corner", "Variants", "Only place for # in this diagonal", "This cell is #",
-        "Cage sum: #", "Diagonal Sudoku", "Killer Sudoku", "Mini Sudoku 6\u00d76"};
+        "Explain", "Show timer", "Color", "Corner"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -101,8 +92,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta",
         "Günlük Sudoku", "Paylaş", "Sudoku oyna", "İstatistik", "Çözülen", "En iyi süre", "Ortalama süre", "Günlük seri",
-        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "Varyantlar", "Bu köşegende # için tek yer", "Bu hücre #",
-        "Kafes toplamı: #", "Diagonal Sudoku", "Killer Sudoku", "Mini Sudoku 6\u00d76"};
+        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -129,11 +119,7 @@ final class BoardView extends View implements Runnable {
     int cDim;
     int cAccent;
     int cCorner;
-    int cDiag;
     int[] palette;
-    DashPathEffect cageDash;
-    float cageDashCell;
-    int layoutN;
     int insetL;
     int insetT;
     int insetR;
@@ -161,7 +147,6 @@ final class BoardView extends View implements Runnable {
     float keyH;
     boolean menuOpen;
     boolean statsOpen;
-    boolean variantsOpen;
     boolean colorMode;
     boolean idle;
     long lastInput = SystemClock.elapsedRealtime();
@@ -194,7 +179,6 @@ final class BoardView extends View implements Runnable {
             cDim = 0x99000000;
             cAccent = 0xFF8AB4F8;
             cCorner = 0xFFFFAB70;
-            cDiag = 0xFF211D2B;
             palette = PALETTE_DARK;
         } else {
             cBg = 0xFFFFFFFF;
@@ -214,7 +198,6 @@ final class BoardView extends View implements Runnable {
             cDim = 0x66000000;
             cAccent = 0xFF1A73E8;
             cCorner = 0xFFC2410C;
-            cDiag = 0xFFF3F0FB;
             palette = PALETTE_LIGHT;
         }
         menuOpen = !game.active && MainActivity.pendingLevel < 0;
@@ -237,13 +220,7 @@ final class BoardView extends View implements Runnable {
         layout(w, h);
     }
 
-    private void syncLayout() {
-        if (layoutN != game.n) layout(getWidth(), getHeight());
-    }
-
     private void layout(int w, int h) {
-        int n = game.n;
-        layoutN = n;
         float left = insetL;
         float top = insetT;
         float cw = w - insetL - insetR;
@@ -271,8 +248,8 @@ final class BoardView extends View implements Runnable {
             for (int i = 0; i < TOOLS; i++) toolX[i] = px + i * toolW;
             float ky = toolY + toolH + pad;
             keyW = pw / 3;
-            keyH = (boardY + boardSize - ky) / (n / 3);
-            for (int i = 0; i < n; i++) {
+            keyH = (boardY + boardSize - ky) / 3;
+            for (int i = 0; i < 9; i++) {
                 keyX[i] = px + (i % 3) * keyW;
                 keyY[i] = ky + (i / 3) * keyH;
             }
@@ -297,13 +274,13 @@ final class BoardView extends View implements Runnable {
             toolY = msgY + msgH + gap;
             toolW = boardSize / TOOLS;
             for (int i = 0; i < TOOLS; i++) toolX[i] = boardX + i * toolW;
-            keyW = boardSize / n;
-            for (int i = 0; i < n; i++) {
+            keyW = boardSize / 9;
+            for (int i = 0; i < 9; i++) {
                 keyX[i] = boardX + i * keyW;
                 keyY[i] = toolY + toolH + gap;
             }
         }
-        cell = boardSize / n;
+        cell = boardSize / 9;
     }
 
     private void drawText(Canvas c, String s, float cx, float cy, float size, int color, Typeface face) {
@@ -325,7 +302,6 @@ final class BoardView extends View implements Runnable {
 
     protected void onDraw(Canvas c) {
         c.drawColor(cBg);
-        syncLayout();
         boolean generating = MainActivity.pendingLevel >= 0;
         if (wasGenerating && !generating) {
             wasGenerating = false;
@@ -348,113 +324,58 @@ final class BoardView extends View implements Runnable {
         }
     }
 
-    private Variant.Shape shape() {
-        Variant v = MainActivity.variant;
-        return v == null ? null : v.shape;
-    }
-
     private void drawBoard(Canvas c) {
-        int n = game.n;
-        Variant.Shape shape = shape();
-        boolean diagonal = shape != null && shape.kind == Variant.KIND_DIAGONAL;
-        boolean killer = shape != null && shape.kind == Variant.KIND_KILLER;
         int sel = game.selected;
         int selValue = sel >= 0 && game.value[sel] != 0 ? game.value[sel] : game.sticky;
         int selBit = selValue == 0 ? 0 : Sudoku.bit(selValue);
-        for (int i = 0; i < game.size; i++) {
-            int row = i / n, col = i % n;
+        for (int i = 0; i < 81; i++) {
             int color = 0;
             if (i == sel) color = cSelected;
             else if (game.color[i] != 0) color = palette[game.color[i]];
             else if (selValue != 0 && (game.value[i] == selValue || (game.value[i] == 0 && ((game.notes[i] | game.corner[i]) & selBit) != 0))) color = cSame;
-            else if (sel >= 0 && game.sees(sel, i)) color = cUnit;
-            else if (diagonal && (row == col || row + col == n - 1)) color = cDiag;
+            else if (sel >= 0 && Sudoku.sees(i, sel)) color = cUnit;
             if (color == 0) continue;
-            float x = boardX + col * cell;
-            float y = boardY + row * cell;
+            float x = boardX + Sudoku.COL[i] * cell;
+            float y = boardY + Sudoku.ROW[i] * cell;
             fillRect(c, x, y, x + cell, y + cell, color, 0);
         }
-        int noteRows = n / 3;
-        float noteL = killer ? cell * 0.1f : 0, noteT = killer ? cell * 0.27f : 0;
-        float noteW = killer ? cell * 0.8f : cell, noteH = killer ? cell * 0.65f : cell;
-        float noteSize = killer ? cell * 0.2f : cell * 0.28f;
-        for (int i = 0; i < game.size; i++) {
-            float x0 = boardX + (i % n) * cell;
-            float y0 = boardY + (i / n) * cell;
+        for (int i = 0; i < 81; i++) {
+            float cx = boardX + (Sudoku.COL[i] + 0.5f) * cell;
+            float cy = boardY + (Sudoku.ROW[i] + 0.5f) * cell;
             int v = game.value[i];
             if (v != 0) {
                 boolean given = game.given[i] != 0;
                 int color = game.conflict(i) || game.wrong(i) ? cWrong : given ? cGiven : cEntered;
-                drawText(c, DIGITS[v], x0 + cell / 2, y0 + cell / 2, cell * 0.62f, color, given ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+                drawText(c, DIGITS[v], cx, cy, cell * 0.62f, color, given ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
             } else if ((game.notes[i] | game.corner[i]) != 0) {
-                for (int d = 1; d <= n; d++) {
+                float x0 = boardX + Sudoku.COL[i] * cell;
+                float y0 = boardY + Sudoku.ROW[i] * cell;
+                for (int d = 1; d <= 9; d++) {
                     int b = Sudoku.bit(d);
                     if (((game.notes[i] | game.corner[i]) & b) == 0) continue;
-                    float nx = x0 + noteL + ((d - 1) % 3 + 0.5f) * noteW / 3;
-                    float ny = y0 + noteT + ((d - 1) / 3 + 0.5f) * noteH / noteRows;
+                    float nx = x0 + ((d - 1) % 3 + 0.5f) * cell / 3;
+                    float ny = y0 + ((d - 1) / 3 + 0.5f) * cell / 3;
                     boolean same = d == selValue;
                     boolean corner = (game.corner[i] & b) != 0;
-                    drawText(c, DIGITS[d], nx, ny, noteSize, same ? cEntered : corner ? cCorner : cNote, same || corner ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+                    drawText(c, DIGITS[d], nx, ny, cell * 0.28f, same ? cEntered : corner ? cCorner : cNote, same || corner ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
                 }
             }
         }
-        if (killer) drawCages(c, shape);
-        int boxH = shape == null ? 3 : shape.boxH;
-        int boxW = shape == null ? 3 : shape.boxW;
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.BUTT);
-        for (int pass = 0; pass < 2; pass++) {
-            boolean thick = pass == 1;
+        for (int k = 0; k <= 9; k++) {
+            boolean thick = k % 3 == 0;
             paint.setColor(thick ? cThick : cLine);
-            paint.setStrokeWidth(cell * (thick ? 0.06f : 0.02f) * 9 / n);
-            for (int k = 0; k <= n; k++) {
-                float p = k * cell;
-                if ((k % boxH == 0) == thick) c.drawLine(boardX, boardY + p, boardX + boardSize, boardY + p, paint);
-                if ((k % boxW == 0) == thick) c.drawLine(boardX + p, boardY, boardX + p, boardY + boardSize, paint);
-            }
-        }
-    }
-
-    private void drawCages(Canvas c, Variant.Shape shape) {
-        int n = shape.n;
-        float inset = cell * 0.07f;
-        if (cageDash == null || cageDashCell != cell) {
-            cageDash = new DashPathEffect(new float[] {cell * 0.09f, cell * 0.06f}, 0);
-            cageDashCell = cell;
-        }
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeCap(Paint.Cap.BUTT);
-        paint.setStrokeWidth(Math.max(1, cell * 0.035f));
-        paint.setColor(cNote);
-        paint.setPathEffect(cageDash);
-        for (int i = 0; i < shape.size; i++) {
-            int k = shape.cageOf[i];
-            if (k < 0) continue;
-            int row = i / n, col = i % n;
-            float l = boardX + col * cell + inset, r = boardX + (col + 1) * cell - inset;
-            float t = boardY + row * cell + inset, b = boardY + (row + 1) * cell - inset;
-            if (row == 0 || shape.cageOf[i - n] != k) c.drawLine(l, t, r, t, paint);
-            if (row == n - 1 || shape.cageOf[i + n] != k) c.drawLine(l, b, r, b, paint);
-            if (col == 0 || shape.cageOf[i - 1] != k) c.drawLine(l, t, l, b, paint);
-            if (col == n - 1 || shape.cageOf[i + 1] != k) c.drawLine(r, t, r, b, paint);
-        }
-        paint.setPathEffect(null);
-        float size = cell * 0.2f;
-        for (int i = 0; i < shape.size; i++) {
-            if (!shape.cageHead(i)) continue;
-            String sum = Integer.toString(shape.cageSum[shape.cageOf[i]]);
-            float w = width(sum, size, Typeface.DEFAULT_BOLD);
-            float x = boardX + (i % n) * cell + inset * 0.5f;
-            float y = boardY + (i / n) * cell + inset * 0.5f;
-            int back = i == game.selected ? cSelected : game.color[i] != 0 ? palette[game.color[i]] : cBg;
-            fillRect(c, x, y, x + w + size * 0.3f, y + size * 1.15f, back, 0);
-            drawText(c, sum, x + size * 0.15f + w / 2, y + size * 0.58f, size, cGiven, Typeface.DEFAULT_BOLD);
+            paint.setStrokeWidth(cell * (thick ? 0.06f : 0.02f));
+            float p = k * cell;
+            c.drawLine(boardX, boardY + p, boardX + boardSize, boardY + p, paint);
+            c.drawLine(boardX + p, boardY, boardX + p, boardY + boardSize, paint);
         }
     }
 
     private void drawKeys(Canvas c) {
         float inset = keyW * 0.06f;
-        for (int d = 1; d <= game.n; d++) {
+        for (int d = 1; d <= 9; d++) {
             float x = keyX[d - 1];
             float y = keyY[d - 1];
             if (colorMode) {
@@ -466,19 +387,17 @@ final class BoardView extends View implements Runnable {
             }
             boolean on = d == game.sticky;
             fillRect(c, x + inset, y + inset, x + keyW - inset, y + keyH - inset, on ? cAccent : cKey, keyW * 0.15f);
-            int left = game.active ? Math.max(0, game.remaining(d)) : game.n;
+            int left = game.active ? Math.max(0, game.remaining(d)) : 9;
             drawText(c, DIGITS[d], x + keyW / 2, y + keyH * 0.42f, keyH * 0.5f, on ? cBg : left > 0 ? cKeyText : cMuted, Typeface.DEFAULT);
             if (left > 0) drawText(c, DIGITS[left], x + keyW / 2, y + keyH * 0.8f, keyH * 0.2f, on ? cBg : cMuted, Typeface.DEFAULT);
         }
     }
 
     private int target(float x, float y) {
-        syncLayout();
-        int n = game.n;
         if (x >= boardX && x < boardX + boardSize && y >= boardY && y < boardY + boardSize) {
-            return Math.min(n - 1, (int) ((y - boardY) / cell)) * n + Math.min(n - 1, (int) ((x - boardX) / cell));
+            return (int) ((y - boardY) / cell) * 9 + (int) ((x - boardX) / cell);
         }
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < 9; i++) {
             if (x >= keyX[i] && x < keyX[i] + keyW && y >= keyY[i] && y < keyY[i] + keyH) return 100 + i;
         }
         for (int i = 0; i < TOOLS; i++) {
@@ -490,7 +409,7 @@ final class BoardView extends View implements Runnable {
     }
 
     private boolean explainable() {
-        return game.active && !game.solved && game.hintActive() && game.hintKind == Game.HINT_PLACE && MainActivity.variant == null;
+        return game.active && !game.solved && game.hintActive() && game.hintKind == Game.HINT_PLACE;
     }
 
     public boolean onTouchEvent(MotionEvent e) {
@@ -515,9 +434,9 @@ final class BoardView extends View implements Runnable {
         int t = target(x, y);
         if (action == MotionEvent.ACTION_DOWN) {
             downTarget = t;
-            if (t >= 0 && t < 100) finish(game.tap(t));
+            if (t >= 0 && t < 81) finish(game.tap(t));
         } else if (action == MotionEvent.ACTION_MOVE) {
-            if (t >= 0 && t < 100 && t != downTarget) {
+            if (t >= 0 && t < 81 && t != downTarget) {
                 downTarget = -1;
                 if (game.active && game.selected != t) {
                     game.select(t);
@@ -546,10 +465,7 @@ final class BoardView extends View implements Runnable {
             changed = true;
         }
         else if (t == 203) changed = game.fillNotes();
-        else if (t == 204) {
-            Variant v = MainActivity.variant;
-            changed = v != null ? game.hint(v) : game.hint(MainActivity.engine);
-        }
+        else if (t == 204) changed = game.hint(MainActivity.engine);
         else if (t == 300) {
             openMenu();
             return;
@@ -577,7 +493,7 @@ final class BoardView extends View implements Runnable {
             removeCallbacks(this);
             if (!MainActivity.recorded) {
                 MainActivity.recorded = true;
-                if (MainActivity.variant == null) MainActivity.recordSolved(game.level, (int) (game.time(now) / 1000), MainActivity.dailyDate);
+                MainActivity.recordSolved(game.level, (int) (game.time(now) / 1000), MainActivity.dailyDate);
             }
         }
         if (changed) MainActivity.save();
@@ -650,7 +566,7 @@ final class BoardView extends View implements Runnable {
     private String hintMessage() {
         if (game.hintKind == Game.HINT_WRONG) return text[S_WRONG];
         int u = game.hintUnit;
-        String s = text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : u == 4 ? S_DIAG : u == 5 ? S_REVEAL : S_NAKED].replace("#", DIGITS[game.hintDigit]);
+        String s = text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : S_NAKED].replace("#", DIGITS[game.hintDigit]);
         int t = game.hintTech;
         if (t > 0) s = s + " (" + text[t < 7 ? S_TECH + t - 1 : S_TECH_EXTRA + t - 7] + ")";
         return s;
@@ -666,7 +582,7 @@ final class BoardView extends View implements Runnable {
             return;
         }
         String second = text[S_AGAIN];
-        String link = MainActivity.variant == null ? "  " + text[S_EXPLAIN] + " \u203a" : "";
+        String link = "  " + text[S_EXPLAIN] + " \u203a";
         drawText(c, first, cx, msgY + msgH * 0.3f, fit(first, size, msgW * 0.96f), cAccent, Typeface.DEFAULT);
         float small = fit(second + link, size * 0.9f, msgW * 0.96f);
         float w1 = width(second, small, Typeface.DEFAULT), w2 = width(link, small, Typeface.DEFAULT);
@@ -796,21 +712,14 @@ final class BoardView extends View implements Runnable {
     }
 
     private int[][] buildMenuSpec() {
-        if (variantsOpen) return new int[][] {{441}, {442}, {443}, {444}};
         boolean solved = game.active && game.solved;
-        boolean variants = MainActivity.menuKind >= 0;
-        int levels = variants ? Variant.LEVELS : Sudoku.LEVELS;
-        int n = (solved ? 1 : 0) + levels + (variants ? 2 : 3) + (cancellable() ? 2 : 0);
+        int n = (solved ? 1 : 0) + 7 + (cancellable() ? 2 : 0);
         int[][] rows = new int[n][];
         int k = 0;
         if (solved) rows[k++] = new int[] {412};
-        for (int level = 0; level < levels; level++) rows[k++] = new int[] {400 + level};
+        for (int level = 0; level < 5; level++) rows[k++] = new int[] {400 + level};
         rows[k++] = new int[] {405, 408};
-        if (variants) rows[k++] = new int[] {409, 413};
-        else {
-            rows[k++] = new int[] {409, 411};
-            rows[k++] = new int[] {413};
-        }
+        rows[k++] = new int[] {409, 411};
         if (cancellable()) {
             rows[k++] = new int[] {406};
             rows[k++] = new int[] {407};
@@ -819,7 +728,6 @@ final class BoardView extends View implements Runnable {
     }
 
     private int titleLines() {
-        if (variantsOpen) return 1;
         boolean solved = game.active && game.solved;
         boolean dated = solved ? !MainActivity.dailyDate.isEmpty() : MainActivity.dailyMenu;
         return 2 + (solved ? 1 : 0) + (dated ? 1 : 0);
@@ -856,19 +764,12 @@ final class BoardView extends View implements Runnable {
         return java.text.DateFormat.getDateInstance(java.text.DateFormat.LONG, Locale.getDefault()).format(MainActivity.parseDate(day).getTime());
     }
 
-    private String gameName() {
-        Variant v = MainActivity.variant;
-        return v == null ? "" : text[S_VARIANT_NAME + v.shape.kind];
-    }
-
     private String[] titleTexts() {
-        if (variantsOpen) return new String[] {text[S_VARIANTS]};
         boolean solved = game.active && game.solved;
         String[] lines = new String[titleLines()];
         int k = 0;
-        int kind = MainActivity.menuKind;
-        lines[k++] = solved ? text[S_SOLVED] : MainActivity.dailyMenu ? text[S_DAILY] : kind >= 0 ? text[S_VARIANT_NAME + kind] : text[S_TITLE];
-        if (solved) lines[k++] = (MainActivity.variant != null ? gameName() + " \u00b7 " : "") + levelText() + "  " + clock(game.time(0));
+        lines[k++] = text[solved ? S_SOLVED : MainActivity.dailyMenu ? S_DAILY : S_TITLE];
+        if (solved) lines[k++] = levelText() + "  " + clock(game.time(0));
         if (solved ? !MainActivity.dailyDate.isEmpty() : MainActivity.dailyMenu) lines[k++] = dateText(solved ? MainActivity.dailyDate : MainActivity.today());
         lines[k] = text[S_NEW];
         return lines;
@@ -913,18 +814,6 @@ final class BoardView extends View implements Runnable {
     }
 
     private void menuAction(int t) {
-        if (variantsOpen) {
-            if (t >= 441 && t <= 443) {
-                MainActivity.menuKind = VARIANT_ORDER[t - 441];
-                MainActivity.dailyMenu = false;
-            }
-            if (t >= 441 && t <= 444 || t == 499) {
-                variantsOpen = false;
-                invalidate();
-                sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
-            }
-            return;
-        }
         if (t >= 400 && t < 405) {
             startGame(t - 400);
         } else if (t == 405) {
@@ -936,12 +825,7 @@ final class BoardView extends View implements Runnable {
             MainActivity.prefs.edit().putString("t", MainActivity.showTimer ? "1" : "0").apply();
             invalidate();
         } else if (t == 409) {
-            if (MainActivity.menuKind >= 0) MainActivity.menuKind = -1;
-            else MainActivity.dailyMenu = !MainActivity.dailyMenu;
-            invalidate();
-            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
-        } else if (t == 413) {
-            variantsOpen = true;
+            MainActivity.dailyMenu = !MainActivity.dailyMenu;
             invalidate();
             sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
         } else if (t == 411) {
@@ -961,8 +845,6 @@ final class BoardView extends View implements Runnable {
 
     private String shareText() {
         String result = levelText() + " \u00b7 " + clock(game.time(0));
-        Variant v = MainActivity.variant;
-        if (v != null) return gameName() + " \u00b7 " + result + "\n" + SITE + langPath() + VARIANT_PATHS[v.shape.kind];
         if (!MainActivity.dailyDate.isEmpty()) return text[S_DAILY] + " " + dateText(MainActivity.dailyDate) + " \u00b7 " + result + "\n" + SITE + langPath() + "daily/";
         return text[S_TITLE] + " \u00b7 " + result + "\n" + SITE + langPath() + "?p=" + digits(game.given);
     }
@@ -1055,14 +937,13 @@ final class BoardView extends View implements Runnable {
         game.pause(SystemClock.elapsedRealtime());
         removeCallbacks(this);
         wasGenerating = true;
-        host.generate(level, MainActivity.dailyMenu, MainActivity.menuKind);
+        host.generate(level, MainActivity.dailyMenu);
         invalidate();
         sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
     }
 
     private void openMenu() {
         menuOpen = true;
-        variantsOpen = false;
         game.pause(SystemClock.elapsedRealtime());
         removeCallbacks(this);
         invalidate();
@@ -1072,7 +953,6 @@ final class BoardView extends View implements Runnable {
     private void closeMenu() {
         menuOpen = false;
         statsOpen = false;
-        variantsOpen = false;
         idle = false;
         lastInput = SystemClock.elapsedRealtime();
         resumeIfAllowed();
@@ -1092,9 +972,7 @@ final class BoardView extends View implements Runnable {
         if (id < 405) return levelName(id - 400);
         if (id == 405) return text[S_ERRORS] + ": " + text[game.showErrors ? S_ON : S_OFF];
         if (id == 408) return text[S_TIMER] + ": " + text[MainActivity.showTimer ? S_ON : S_OFF];
-        if (id == 409) return text[MainActivity.dailyMenu || MainActivity.menuKind >= 0 ? S_PLAY : S_DAILY];
-        if (id == 413) return text[S_VARIANTS];
-        if (id >= 441 && id <= 443) return text[S_VARIANT_NAME + VARIANT_ORDER[id - 441]];
+        if (id == 409) return text[MainActivity.dailyMenu ? S_PLAY : S_DAILY];
         if (id == 411) return text[S_STATS];
         if (id == 412) return text[S_SHARE];
         return text[id == 406 ? S_RESTART : S_CANCEL];
@@ -1151,13 +1029,13 @@ final class BoardView extends View implements Runnable {
             return ids;
         }
         boolean hint = game.active && game.hintActive();
-        int[] ids = new int[2 + (hint ? 1 : 0) + game.size + game.n + TOOLS];
+        int[] ids = new int[(hint ? 93 : 92) + TOOLS];
         int n = 0;
         ids[n++] = 301;
         ids[n++] = 300;
         if (hint) ids[n++] = 302;
-        for (int i = 0; i < game.size; i++) ids[n++] = i;
-        for (int d = 1; d <= game.n; d++) ids[n++] = 99 + d;
+        for (int i = 0; i < 81; i++) ids[n++] = i;
+        for (int d = 1; d <= 9; d++) ids[n++] = 99 + d;
         for (int i = 0; i < TOOLS; i++) ids[n++] = 200 + i;
         return ids;
     }
@@ -1177,29 +1055,22 @@ final class BoardView extends View implements Runnable {
         if (id == 431) return text[S_CANCEL];
         if (id == 410) return String.join(". ", titleTexts());
         if (id >= 400) return menuLabel(id);
-        if (id == 301) {
-            if (!game.active) return "";
-            String level = MainActivity.variant != null ? gameName() + ", " + levelText() : levelText();
-            return MainActivity.showTimer ? level + ", " + clock(game.time(SystemClock.elapsedRealtime())) : level;
-        }
+        if (id == 301) return game.active ? MainActivity.showTimer ? levelText() + ", " + clock(game.time(SystemClock.elapsedRealtime())) : levelText() : "";
         if (id == 300) return text[S_NEW];
         if (id == 302) {
             String message = hintMessage();
-            if (game.hintKind != Game.HINT_PLACE) return message;
-            return MainActivity.variant == null ? message + ". " + text[S_AGAIN] + ". " + text[S_EXPLAIN] : message + ". " + text[S_AGAIN];
+            return game.hintKind == Game.HINT_PLACE ? message + ". " + text[S_AGAIN] + ". " + text[S_EXPLAIN] : message;
         }
         if (id >= 200) return toolLabel(id - 200);
         if (id >= 100) {
             if (colorMode) return id - 99 <= 6 ? text[S_COLOR] + " " + (id - 99) : text[S_ERASE];
-            int left = game.active ? Math.max(0, game.remaining(id - 99)) : game.n;
+            int left = game.active ? Math.max(0, game.remaining(id - 99)) : 9;
             return DIGITS[id - 99] + ", " + text[S_LEFT].replace("#", Integer.toString(left));
         }
-        String label = text[S_ROWLABEL] + " " + (id / game.n + 1) + ", " + text[S_COLLABEL] + " " + (id % game.n + 1);
+        String label = text[S_ROWLABEL] + " " + (Sudoku.ROW[id] + 1) + ", " + text[S_COLLABEL] + " " + (Sudoku.COL[id] + 1);
         if (!game.active) return label;
         int v = game.value[id];
-        Variant.Shape shape = shape();
         String paint = game.color[id] != 0 ? ", " + text[S_COLOR] + " " + game.color[id] : "";
-        if (shape != null && shape.cageHead(id)) paint += ", " + text[S_CAGE].replace("#", Integer.toString(shape.cageSum[shape.cageOf[id]]));
         if (v != 0) return label + ", " + DIGITS[v] + (game.conflict(id) || game.wrong(id) ? ", " + text[S_WRONG] : "") + paint;
         StringBuilder notes = new StringBuilder(label);
         if (game.notes[id] != 0) {
@@ -1215,14 +1086,14 @@ final class BoardView extends View implements Runnable {
 
     boolean axEnabled(int id) {
         boolean playable = game.active && !game.solved;
-        if (id < 100) return playable;
+        if (id < 81) return playable;
         if (id < 109) return playable && (colorMode ? id - 99 <= 7 && game.selected >= 0 : game.remaining(id - 99) > 0);
         if (id < 200 + TOOLS) return playable && (id != 200 || !game.history.isEmpty());
         return true;
     }
 
     boolean axSelected(int id) {
-        if (id < 100) return id == game.selected;
+        if (id < 81) return id == game.selected;
         if (id < 109) return !colorMode && id - 99 == game.sticky;
         if (id == 202) return game.noteMode;
         if (id == 205) return colorMode;
@@ -1253,10 +1124,9 @@ final class BoardView extends View implements Runnable {
         if (id == 300) return new Rect((int) (topX + topW - topH * 0.9f), (int) topY, (int) (topX + topW), (int) (topY + topH));
         if (id == 302) return new Rect((int) msgX, (int) msgY, (int) (msgX + msgW), (int) (msgY + msgH));
         if (id >= 200) return new Rect((int) toolX[id - 200], (int) toolY, (int) (toolX[id - 200] + toolW), (int) (toolY + toolH));
-        syncLayout();
         if (id >= 100) return new Rect((int) keyX[id - 100], (int) keyY[id - 100], (int) (keyX[id - 100] + keyW), (int) (keyY[id - 100] + keyH));
-        float x = boardX + (id % game.n) * cell;
-        float y = boardY + (id / game.n) * cell;
+        float x = boardX + Sudoku.COL[id] * cell;
+        float y = boardY + Sudoku.ROW[id] * cell;
         return new Rect((int) x, (int) y, (int) (x + cell), (int) (y + cell));
     }
 
@@ -1269,18 +1139,12 @@ final class BoardView extends View implements Runnable {
             } else if (t >= 400 && t != 410 && t != 420) menuAction(t);
             return;
         }
-        if (t < 100) finish(game.tap(t));
+        if (t < 81) finish(game.tap(t));
         else if (t >= 100 && t <= 300) act(t);
         else if (t == 302 && explainable()) act(t);
     }
 
     boolean back() {
-        if (variantsOpen) {
-            variantsOpen = false;
-            invalidate();
-            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
-            return true;
-        }
         if (statsOpen) {
             closeStats();
             return true;
