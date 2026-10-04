@@ -18,9 +18,6 @@ public class MainActivity extends Activity implements Runnable {
     static BoardView current;
     static volatile int pendingLevel = -1;
     static volatile String pendingDaily = "";
-    static volatile int pendingKind = -1;
-    static volatile Variant variant;
-    static int menuKind = -1;
     static String dailyDate = "";
     static boolean dailyMenu;
     static boolean showTimer = true;
@@ -33,17 +30,12 @@ public class MainActivity extends Activity implements Runnable {
         super.onCreate(state);
         if (prefs == null) {
             prefs = getApplicationContext().getSharedPreferences("s", MODE_PRIVATE);
-            if (restoreVariant()) game.decode(prefs.getString("g", null));
-            if (!game.active) {
-                variant = null;
-                game.setShape(null);
-            }
+            game.decode(prefs.getString("g", null));
             dailyDate = game.active ? prefs.getString("dd", "") : "";
             dailyMenu = !dailyDate.isEmpty();
-            menuKind = variant == null ? -1 : variant.shape.kind;
             showTimer = !"0".equals(prefs.getString("t", "1"));
             recorded = game.solved;
-            if (game.active && variant == null) rateSaved();
+            if (game.active) rateSaved();
         }
         view = new BoardView(this);
         current = view;
@@ -75,71 +67,8 @@ public class MainActivity extends Activity implements Runnable {
 
     static void save() {
         synchronized (game) {
-            Variant v = variant;
-            prefs.edit().putString("g", game.encode(SystemClock.elapsedRealtime())).putString("dd", dailyDate)
-                .putString("vk", v == null ? "" : Integer.toString(v.shape.kind))
-                .putString("vc", v == null || v.shape.kind != Variant.KIND_KILLER ? "" : cageText(v.shape)).apply();
+            prefs.edit().putString("g", game.encode(SystemClock.elapsedRealtime())).putString("dd", dailyDate).apply();
         }
-    }
-
-    static String cageText(Variant.Shape shape) {
-        StringBuilder sb = new StringBuilder(400);
-        for (int c = 0; c < shape.size; c++) {
-            if (c > 0) sb.append(',');
-            sb.append(shape.cageOf[c]);
-        }
-        sb.append(';');
-        for (int k = 0; k < shape.cageCount; k++) {
-            if (k > 0) sb.append(',');
-            sb.append(shape.cageSum[k]);
-        }
-        return sb.toString();
-    }
-
-    static boolean readCages(Variant.Shape shape, String text) {
-        try {
-            String[] parts = text.split(";", -1);
-            if (parts.length != 2) return false;
-            String[] cells = parts[0].split(",");
-            String[] sums = parts[1].split(",");
-            if (cells.length != shape.size || sums.length < 1 || sums.length > Variant.MAX_CAGES) return false;
-            int[] cageOf = new int[shape.size];
-            int[] cageSum = new int[sums.length];
-            int[] members = new int[sums.length];
-            for (int k = 0; k < sums.length; k++) {
-                cageSum[k] = Integer.parseInt(sums[k]);
-                if (cageSum[k] < 1 || cageSum[k] > 45) return false;
-            }
-            for (int c = 0; c < shape.size; c++) {
-                cageOf[c] = Integer.parseInt(cells[c]);
-                if (cageOf[c] < -1 || cageOf[c] >= sums.length) return false;
-                if (cageOf[c] >= 0 && ++members[cageOf[c]] > 9) return false;
-            }
-            for (int m : members) if (m == 0) return false;
-            shape.setCages(cageOf, cageSum, sums.length);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
-    static boolean restoreVariant() {
-        variant = null;
-        game.setShape(null);
-        String kindText = prefs.getString("vk", "");
-        if (kindText.isEmpty()) return true;
-        int kind;
-        try {
-            kind = Integer.parseInt(kindText);
-        } catch (NumberFormatException e) {
-            return false;
-        }
-        if (kind < 0 || kind > Variant.KIND_MINI) return false;
-        Variant v = new Variant(kind);
-        if (kind == Variant.KIND_KILLER && !readCages(v.shape, prefs.getString("vc", ""))) return false;
-        variant = v;
-        game.setShape(v.shape);
-        return true;
     }
 
     static String today() {
@@ -252,32 +181,18 @@ public class MainActivity extends Activity implements Runnable {
     }
 
     public void run() {
+        Sudoku worker = new Sudoku();
         int level = pendingLevel;
-        int kind = pendingKind;
         String day = pendingDaily;
-        if (kind >= 0) {
-            Variant worker = new Variant(kind);
-            int[] puzzle = worker.generate(level);
-            synchronized (game) {
-                game.setShape(worker.shape);
-                game.start(puzzle, worker.solution, level);
-                game.rating = 0;
-                variant = worker;
-            }
-        } else {
-            Sudoku worker = new Sudoku();
-            if (!day.isEmpty()) worker.seed(dailySeed(day, level));
-            int[] puzzle = worker.generate(level);
-            synchronized (game) {
-                game.setShape(null);
-                game.start(puzzle, worker.solution, level);
-                game.rating = worker.rating;
-                variant = null;
-            }
+        if (!day.isEmpty()) worker.seed(dailySeed(day, level));
+        int[] puzzle = worker.generate(level);
+        synchronized (game) {
+            game.start(puzzle, worker.solution, level);
+            game.rating = worker.rating;
         }
         dailyDate = day;
         recorded = false;
-        if (kind < 0) recordStart(level);
+        recordStart(level);
         save();
         pendingLevel = -1;
         BoardView v = current;
@@ -301,10 +216,9 @@ public class MainActivity extends Activity implements Runnable {
         }).start();
     }
 
-    void generate(int level, boolean daily, int kind) {
+    void generate(int level, boolean daily) {
         if (pendingLevel >= 0) return;
-        pendingDaily = daily && kind < 0 ? today() : "";
-        pendingKind = kind;
+        pendingDaily = daily ? today() : "";
         pendingLevel = level;
         new Thread(this).start();
     }
