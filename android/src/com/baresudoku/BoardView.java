@@ -375,6 +375,9 @@ final class BoardView extends View implements Runnable {
             fillRect(c, x, y, x + cell, y + cell, color, 0);
         }
         int noteRows = n / 3;
+        float noteL = killer ? cell * 0.1f : 0, noteT = killer ? cell * 0.27f : 0;
+        float noteW = killer ? cell * 0.8f : cell, noteH = killer ? cell * 0.65f : cell;
+        float noteSize = killer ? cell * 0.2f : cell * 0.28f;
         for (int i = 0; i < game.size; i++) {
             float x0 = boardX + (i % n) * cell;
             float y0 = boardY + (i / n) * cell;
@@ -387,11 +390,11 @@ final class BoardView extends View implements Runnable {
                 for (int d = 1; d <= n; d++) {
                     int b = Sudoku.bit(d);
                     if (((game.notes[i] | game.corner[i]) & b) == 0) continue;
-                    float nx = x0 + ((d - 1) % 3 + 0.5f) * cell / 3;
-                    float ny = y0 + ((d - 1) / 3 + 0.5f) * cell / noteRows;
+                    float nx = x0 + noteL + ((d - 1) % 3 + 0.5f) * noteW / 3;
+                    float ny = y0 + noteT + ((d - 1) / 3 + 0.5f) * noteH / noteRows;
                     boolean same = d == selValue;
                     boolean corner = (game.corner[i] & b) != 0;
-                    drawText(c, DIGITS[d], nx, ny, cell * 0.28f, same ? cEntered : corner ? cCorner : cNote, same || corner ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+                    drawText(c, DIGITS[d], nx, ny, noteSize, same ? cEntered : corner ? cCorner : cNote, same || corner ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
                 }
             }
         }
@@ -436,7 +439,7 @@ final class BoardView extends View implements Runnable {
             if (col == n - 1 || shape.cageOf[i + 1] != k) c.drawLine(r, t, r, b, paint);
         }
         paint.setPathEffect(null);
-        float size = cell * 0.22f;
+        float size = cell * 0.2f;
         for (int i = 0; i < shape.size; i++) {
             if (!shape.cageHead(i)) continue;
             String sum = Integer.toString(shape.cageSum[shape.cageOf[i]]);
@@ -444,8 +447,8 @@ final class BoardView extends View implements Runnable {
             float x = boardX + (i % n) * cell + inset * 0.5f;
             float y = boardY + (i / n) * cell + inset * 0.5f;
             int back = i == game.selected ? cSelected : game.color[i] != 0 ? palette[game.color[i]] : cBg;
-            fillRect(c, x, y, x + w + size * 0.3f, y + size * 1.05f, back, 0);
-            drawText(c, sum, x + size * 0.15f + w / 2, y + size * 0.55f, size, cGiven, Typeface.DEFAULT_BOLD);
+            fillRect(c, x, y, x + w + size * 0.3f, y + size * 1.15f, back, 0);
+            drawText(c, sum, x + size * 0.15f + w / 2, y + size * 0.58f, size, cGiven, Typeface.DEFAULT_BOLD);
         }
     }
 
