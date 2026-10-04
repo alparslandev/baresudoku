@@ -3,14 +3,17 @@
 #include <time.h>
 #include "Sudoku.h"
 #include "Game.h"
+#include "Variant.h"
 
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
     S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
     S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7, S_DAILY, S_SHARE, S_PLAY, S_STATS, S_PLAYED, S_BEST, S_AVERAGE, S_STREAK,
-    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER };
+    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER, S_VARIANTS, S_DIAG, S_REVEAL, S_CAGE, S_VARIANT_NAME };
 enum { IDLE_MS = 60000, MENU_MAX = 12, TOOLS = 6 };
 static const uint32_t PALETTE_LIGHT[7] = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
 static const uint32_t PALETTE_DARK[7] = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
+static const int VARIANT_ORDER[3] = {VARIANT_KIND_KILLER, VARIANT_KIND_DIAGONAL, VARIANT_KIND_MINI};
+static NSString *const VARIANT_PATHS[3] = {@"diagonal/", @"killer/", @"mini/"};
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -26,7 +29,8 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
     @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
-    @"Explain", @"Show timer", @"Color", @"Corner"};
+    @"Explain", @"Show timer", @"Color", @"Corner", @"Variants", @"Only place for # in this diagonal", @"This cell is #",
+    @"Cage sum: #", @"Diagonal Sudoku", @"Killer Sudoku", @"Mini Sudoku 6\u00d76"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -41,11 +45,14 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
     @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
-    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe"};
+    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"Varyantlar", @"Bu köşegende # için tek yer", @"Bu hücre #",
+    @"Kafes toplamı: #", @"Diagonal Sudoku", @"Killer Sudoku", @"Mini Sudoku 6\u00d76"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
 static Sudoku engine;
+static Variant *variant;
+static int menuKind = -1;
 static int pendingLevel = -1;
 static NSString *dailyDate = @"";
 static BOOL dailyMenu;
@@ -59,11 +66,68 @@ static int64_t nowMs(void) {
     return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+static NSString *cageText(const VariantShape *shape) {
+    NSMutableArray *cells = [NSMutableArray array], *sums = [NSMutableArray array];
+    for (int c = 0; c < shape->size; c++) [cells addObject:@(shape->cageOf[c]).stringValue];
+    for (int k = 0; k < shape->cageCount; k++) [sums addObject:@(shape->cageSum[k]).stringValue];
+    return [NSString stringWithFormat:@"%@;%@", [cells componentsJoinedByString:@","], [sums componentsJoinedByString:@","]];
+}
+
+static int readCages(VariantShape *shape, NSString *text) {
+    NSArray *parts = [text componentsSeparatedByString:@";"];
+    if (parts.count != 2) return 0;
+    NSArray *cells = [parts[0] componentsSeparatedByString:@","], *sums = [parts[1] componentsSeparatedByString:@","];
+    if ((int)cells.count != shape->size || sums.count < 1 || sums.count > VARIANT_MAX_CAGES) return 0;
+    int count = (int)sums.count;
+    int cageOf[VARIANT_MAX_CELLS], cageSum[VARIANT_MAX_CAGES], members[VARIANT_MAX_CAGES] = {0};
+    NSCharacterSet *digits = [NSCharacterSet characterSetWithCharactersInString:@"-0123456789"];
+    for (int k = 0; k < count; k++) {
+        NSString *s = sums[k];
+        if (s.length == 0 || [s stringByTrimmingCharactersInSet:digits].length) return 0;
+        cageSum[k] = s.intValue;
+        if (cageSum[k] < 1 || cageSum[k] > 45) return 0;
+    }
+    for (int c = 0; c < shape->size; c++) {
+        NSString *s = cells[c];
+        if (s.length == 0 || [s stringByTrimmingCharactersInSet:digits].length) return 0;
+        cageOf[c] = s.intValue;
+        if (cageOf[c] < -1 || cageOf[c] >= count) return 0;
+        if (cageOf[c] >= 0 && ++members[cageOf[c]] > 9) return 0;
+    }
+    for (int k = 0; k < count; k++) if (members[k] == 0) return 0;
+    variant_set_cages(shape, cageOf, cageSum, count);
+    return 1;
+}
+
+static void useVariant(Variant *next) {
+    if (variant != next) free(variant);
+    variant = next;
+    game_set_shape(&game, next ? &next->shape : NULL);
+}
+
+static BOOL restoreVariant(NSUserDefaults *defaults) {
+    useVariant(NULL);
+    NSString *kindText = [defaults stringForKey:@"vk"] ?: @"";
+    if (kindText.length == 0) return YES;
+    int kind = kindText.intValue;
+    if (![kindText isEqualToString:@(kind).stringValue] || kind < 0 || kind > VARIANT_KIND_MINI) return NO;
+    Variant *v = malloc(sizeof(Variant));
+    variant_init(v, kind, arc4random());
+    if (kind == VARIANT_KIND_KILLER && !readCages(&v->shape, [defaults stringForKey:@"vc"] ?: @"")) {
+        free(v);
+        return NO;
+    }
+    useVariant(v);
+    return YES;
+}
+
 static void saveGame(void) {
     char *encoded = game_encode(&game, nowMs());
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setObject:[NSString stringWithUTF8String:encoded] forKey:@"g"];
     [defaults setObject:dailyDate forKey:@"dd"];
+    [defaults setObject:variant ? @(variant->shape.kind).stringValue : @"" forKey:@"vk"];
+    [defaults setObject:variant && variant->shape.kind == VARIANT_KIND_KILLER ? cageText(&variant->shape) : @"" forKey:@"vc"];
     free(encoded);
 }
 
@@ -193,7 +257,7 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
 @interface BoardView : UIView {
     NSString *const *text;
     BOOL dark;
-    UIColor *cBg, *cLine, *cThick, *cGiven, *cEntered, *cWrong, *cNote, *cUnit, *cSame, *cSelected, *cKey, *cKeyText, *cMuted, *cPanel, *cDim, *cAccent, *cCorner;
+    UIColor *cBg, *cLine, *cThick, *cGiven, *cEntered, *cWrong, *cNote, *cUnit, *cSame, *cSelected, *cKey, *cKeyText, *cMuted, *cPanel, *cDim, *cAccent, *cCorner, *cDiag;
     UIColor *palette[7];
     CGFloat insetL, insetT, insetR, insetB;
     BOOL landscape;
@@ -202,7 +266,8 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
     CGFloat msgX, msgY, msgW, msgH;
     CGFloat toolX[TOOLS], toolY, toolW, toolH;
     CGFloat keyX[9], keyY[9], keyW, keyH;
-    BOOL menuOpen, wasGenerating, statsOpen, idle, colorMode;
+    BOOL menuOpen, wasGenerating, statsOpen, idle, colorMode, variantsOpen;
+    int layoutN;
     int64_t lastInput;
     int downTarget;
     NSTimer *timer;
@@ -271,13 +336,13 @@ static BoardView *current;
         cEntered = rgb(0xFF8AB4F8); cWrong = rgb(0xFFF28B82); cNote = rgb(0xFFA0A0A0); cUnit = rgb(0xFF1E2430);
         cSame = rgb(0xFF2B3A55); cSelected = rgb(0xFF3B5A8A); cKey = rgb(0xFF1F1F1F); cKeyText = rgb(0xFFF0F0F0);
         cMuted = rgb(0xFF707070); cPanel = rgb(0xFF1F1F1F); cDim = rgb(0x99000000); cAccent = rgb(0xFF8AB4F8);
-        cCorner = rgb(0xFFFFAB70);
+        cCorner = rgb(0xFFFFAB70); cDiag = rgb(0xFF211D2B);
     } else {
         cBg = rgb(0xFFFFFFFF); cLine = rgb(0xFFD0D0D0); cThick = rgb(0xFF303030); cGiven = rgb(0xFF202124);
         cEntered = rgb(0xFF1A73E8); cWrong = rgb(0xFFD93025); cNote = rgb(0xFF5F6368); cUnit = rgb(0xFFEEF3FC);
         cSame = rgb(0xFFD2E3FC); cSelected = rgb(0xFFAECBFA); cKey = rgb(0xFFF1F3F4); cKeyText = rgb(0xFF202124);
         cMuted = rgb(0xFF9AA0A6); cPanel = rgb(0xFFFFFFFF); cDim = rgb(0x66000000); cAccent = rgb(0xFF1A73E8);
-        cCorner = rgb(0xFFC2410C);
+        cCorner = rgb(0xFFC2410C); cDiag = rgb(0xFFF3F0FB);
     }
     for (int k = 1; k <= GAME_COLORS; k++) palette[k] = rgb(dark ? PALETTE_DARK[k] : PALETTE_LIGHT[k]);
     self.backgroundColor = cBg;
@@ -304,7 +369,15 @@ static BoardView *current;
     [self setNeedsDisplay];
 }
 
+- (void)syncLayout {
+    if (layoutN != game.n) [self layoutWidth:self.bounds.size.width height:self.bounds.size.height];
+    if (cursor < 100 && cursor >= game.size) cursor = game.size / 2;
+    if (cursor >= 100 + game.n && cursor < 109) cursor = 99 + game.n;
+}
+
 - (void)layoutWidth:(CGFloat)w height:(CGFloat)h {
+    int n = game.n;
+    layoutN = n;
     CGFloat left = insetL;
     CGFloat top = insetT;
     CGFloat cw = w - insetL - insetR;
@@ -324,8 +397,8 @@ static BoardView *current;
         for (int i = 0; i < TOOLS; i++) toolX[i] = px + i * toolW;
         CGFloat ky = toolY + toolH + pad;
         keyW = pw / 3;
-        keyH = (boardY + boardSize - ky) / 3;
-        for (int i = 0; i < 9; i++) {
+        keyH = (boardY + boardSize - ky) / (n / 3);
+        for (int i = 0; i < n; i++) {
             keyX[i] = px + (i % 3) * keyW;
             keyY[i] = ky + (i / 3) * keyH;
         }
@@ -343,13 +416,13 @@ static BoardView *current;
         toolY = msgY + msgH + gap;
         toolW = boardSize / TOOLS;
         for (int i = 0; i < TOOLS; i++) toolX[i] = boardX + i * toolW;
-        keyW = boardSize / 9;
-        for (int i = 0; i < 9; i++) {
+        keyW = boardSize / n;
+        for (int i = 0; i < n; i++) {
             keyX[i] = boardX + i * keyW;
             keyY[i] = toolY + toolH + gap;
         }
     }
-    cell = boardSize / 9;
+    cell = boardSize / n;
 }
 
 - (BOOL)overlay {
@@ -363,6 +436,7 @@ static BoardView *current;
 - (void)drawRect:(CGRect)rect {
     [cBg setFill];
     UIRectFill(self.bounds);
+    [self syncLayout];
     BOOL generating = pendingLevel >= 0;
     if (wasGenerating && !generating) {
         wasGenerating = NO;
@@ -388,60 +462,112 @@ static BoardView *current;
 }
 
 - (void)drawBoard {
+    int n = game.n;
+    const VariantShape *shape = variant ? &variant->shape : NULL;
+    BOOL diagonal = shape && shape->kind == VARIANT_KIND_DIAGONAL;
     int sel = game.selected;
     int selValue = sel >= 0 && game.value[sel] != 0 ? game.value[sel] : game.sticky;
     int selBit = selValue == 0 ? 0 : sudoku_bit(selValue);
-    for (int i = 0; i < 81; i++) {
+    for (int i = 0; i < game.size; i++) {
+        int row = i / n, col = i % n;
         UIColor *color = nil;
         if (i == sel) color = cSelected;
         else if (game.color[i] != 0) color = palette[game.color[i]];
         else if (selValue != 0 && (game.value[i] == selValue || (game.value[i] == 0 && ((game.notes[i] | game.corner[i]) & selBit) != 0))) color = cSame;
-        else if (sel >= 0 && sudoku_sees(i, sel)) color = cUnit;
+        else if (sel >= 0 && game_sees(&game, sel, i)) color = cUnit;
+        else if (diagonal && (row == col || row + col == n - 1)) color = cDiag;
         if (!color) continue;
-        CGFloat x = boardX + SUDOKU_COL[i] * cell;
-        CGFloat y = boardY + SUDOKU_ROW[i] * cell;
+        CGFloat x = boardX + col * cell;
+        CGFloat y = boardY + row * cell;
         fillRect(x, y, x + cell, y + cell, color, 0);
     }
-    for (int i = 0; i < 81; i++) {
-        CGFloat cx = boardX + (SUDOKU_COL[i] + 0.5) * cell;
-        CGFloat cy = boardY + (SUDOKU_ROW[i] + 0.5) * cell;
+    int noteRows = n / 3;
+    BOOL killer = shape && shape->kind == VARIANT_KIND_KILLER;
+    CGFloat noteL = killer ? cell * 0.1 : 0, noteT = killer ? cell * 0.27 : 0;
+    CGFloat noteW = killer ? cell * 0.8 : cell, noteH = killer ? cell * 0.65 : cell;
+    CGFloat noteSize = killer ? cell * 0.2 : cell * 0.28;
+    for (int i = 0; i < game.size; i++) {
+        CGFloat x0 = boardX + (i % n) * cell;
+        CGFloat y0 = boardY + (i / n) * cell;
         int v = game.value[i];
         if (v != 0) {
             BOOL given = game.given[i] != 0;
             UIColor *color = game_conflict(&game, i) || game_wrong(&game, i) ? cWrong : given ? cGiven : cEntered;
-            drawText(DIGITS[v], cx, cy, cell * 0.62, color, given ? 1 : 0);
+            drawText(DIGITS[v], x0 + cell / 2, y0 + cell / 2, cell * 0.62, color, given ? 1 : 0);
         } else if ((game.notes[i] | game.corner[i]) != 0) {
-            CGFloat x0 = boardX + SUDOKU_COL[i] * cell;
-            CGFloat y0 = boardY + SUDOKU_ROW[i] * cell;
-            for (int d = 1; d <= 9; d++) {
+            for (int d = 1; d <= n; d++) {
                 int b = sudoku_bit(d);
                 if (((game.notes[i] | game.corner[i]) & b) == 0) continue;
-                CGFloat nx = x0 + ((d - 1) % 3 + 0.5) * cell / 3;
-                CGFloat ny = y0 + ((d - 1) / 3 + 0.5) * cell / 3;
+                CGFloat nx = x0 + noteL + ((d - 1) % 3 + 0.5) * noteW / 3;
+                CGFloat ny = y0 + noteT + ((d - 1) / 3 + 0.5) * noteH / noteRows;
                 BOOL same = d == selValue;
                 BOOL corner = (game.corner[i] & b) != 0;
-                drawText(DIGITS[d], nx, ny, cell * 0.28, same ? cEntered : corner ? cCorner : cNote, same || corner ? 1 : 0);
+                drawText(DIGITS[d], nx, ny, noteSize, same ? cEntered : corner ? cCorner : cNote, same || corner ? 1 : 0);
             }
         }
     }
+    if (killer) [self drawCages:shape];
+    int boxH = shape ? shape->boxH : 3, boxW = shape ? shape->boxW : 3;
     CGContextRef c = UIGraphicsGetCurrentContext();
     CGContextSetLineCap(c, kCGLineCapButt);
-    for (int k = 0; k <= 9; k++) {
-        BOOL thick = k % 3 == 0;
+    for (int pass = 0; pass < 2; pass++) {
+        BOOL thick = pass == 1;
         CGContextSetStrokeColorWithColor(c, (thick ? cThick : cLine).CGColor);
-        CGContextSetLineWidth(c, cell * (thick ? 0.06 : 0.02));
-        CGFloat p = k * cell;
-        CGContextMoveToPoint(c, boardX, boardY + p);
-        CGContextAddLineToPoint(c, boardX + boardSize, boardY + p);
-        CGContextMoveToPoint(c, boardX + p, boardY);
-        CGContextAddLineToPoint(c, boardX + p, boardY + boardSize);
+        CGContextSetLineWidth(c, cell * (thick ? 0.06 : 0.02) * 9 / n);
+        for (int k = 0; k <= n; k++) {
+            CGFloat p = k * cell;
+            if ((k % boxH == 0) == thick) {
+                CGContextMoveToPoint(c, boardX, boardY + p);
+                CGContextAddLineToPoint(c, boardX + boardSize, boardY + p);
+            }
+            if ((k % boxW == 0) == thick) {
+                CGContextMoveToPoint(c, boardX + p, boardY);
+                CGContextAddLineToPoint(c, boardX + p, boardY + boardSize);
+            }
+        }
         CGContextStrokePath(c);
+    }
+}
+
+- (void)drawCages:(const VariantShape *)shape {
+    int n = shape->n;
+    CGFloat inset = cell * 0.07;
+    CGContextRef c = UIGraphicsGetCurrentContext();
+    CGContextSaveGState(c);
+    CGContextSetLineCap(c, kCGLineCapButt);
+    CGContextSetStrokeColorWithColor(c, cNote.CGColor);
+    CGContextSetLineWidth(c, MAX(1, cell * 0.035));
+    CGFloat dash[2] = {cell * 0.09, cell * 0.06};
+    CGContextSetLineDash(c, 0, dash, 2);
+    for (int i = 0; i < shape->size; i++) {
+        int k = shape->cageOf[i];
+        if (k < 0) continue;
+        int row = i / n, col = i % n;
+        CGFloat l = boardX + col * cell + inset, r = boardX + (col + 1) * cell - inset;
+        CGFloat t = boardY + row * cell + inset, b = boardY + (row + 1) * cell - inset;
+        if (row == 0 || shape->cageOf[i - n] != k) { CGContextMoveToPoint(c, l, t); CGContextAddLineToPoint(c, r, t); }
+        if (row == n - 1 || shape->cageOf[i + n] != k) { CGContextMoveToPoint(c, l, b); CGContextAddLineToPoint(c, r, b); }
+        if (col == 0 || shape->cageOf[i - 1] != k) { CGContextMoveToPoint(c, l, t); CGContextAddLineToPoint(c, l, b); }
+        if (col == n - 1 || shape->cageOf[i + 1] != k) { CGContextMoveToPoint(c, r, t); CGContextAddLineToPoint(c, r, b); }
+    }
+    CGContextStrokePath(c);
+    CGContextRestoreGState(c);
+    CGFloat size = cell * 0.2;
+    for (int i = 0; i < shape->size; i++) {
+        if (!variant_cage_head(shape, i)) continue;
+        NSString *sum = @(shape->cageSum[shape->cageOf[i]]).stringValue;
+        CGFloat w = textWidth(sum, size, 1);
+        CGFloat x = boardX + (i % n) * cell + inset * 0.5;
+        CGFloat y = boardY + (i / n) * cell + inset * 0.5;
+        UIColor *back = i == game.selected ? cSelected : game.color[i] != 0 ? palette[game.color[i]] : cBg;
+        fillRect(x, y, x + w + size * 0.3, y + size * 1.15, back, 0);
+        drawText(sum, x + size * 0.15 + w / 2, y + size * 0.58, size, cGiven, 1);
     }
 }
 
 - (void)drawKeys {
     CGFloat inset = keyW * 0.06;
-    for (int d = 1; d <= 9; d++) {
+    for (int d = 1; d <= game.n; d++) {
         CGFloat x = keyX[d - 1];
         CGFloat y = keyY[d - 1];
         if (colorMode) {
@@ -452,18 +578,20 @@ static BoardView *current;
         }
         BOOL on = d == game.sticky;
         fillRect(x + inset, y + inset, x + keyW - inset, y + keyH - inset, on ? cAccent : cKey, keyW * 0.15);
-        int left = game.active ? MAX(0, game_remaining(&game, d)) : 9;
+        int left = game.active ? MAX(0, game_remaining(&game, d)) : game.n;
         drawText(DIGITS[d], x + keyW / 2, y + keyH * 0.42, keyH * 0.5, on ? cBg : left > 0 ? cKeyText : cMuted, 0);
         if (left > 0) drawText(DIGITS[left], x + keyW / 2, y + keyH * 0.8, keyH * 0.2, on ? cBg : cMuted, 0);
     }
 }
 
 - (int)targetAt:(CGPoint)p {
+    [self syncLayout];
+    int n = game.n;
     CGFloat x = p.x, y = p.y;
     if (x >= boardX && x < boardX + boardSize && y >= boardY && y < boardY + boardSize) {
-        return (int)((y - boardY) / cell) * 9 + (int)((x - boardX) / cell);
+        return MIN(n - 1, (int)((y - boardY) / cell)) * n + MIN(n - 1, (int)((x - boardX) / cell));
     }
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < n; i++) {
         if (x >= keyX[i] && x < keyX[i] + keyW && y >= keyY[i] && y < keyY[i] + keyH) return 100 + i;
     }
     for (int i = 0; i < TOOLS; i++) {
@@ -478,7 +606,7 @@ static BoardView *current;
 #if TARGET_OS_TV
     return NO;
 #else
-    return game.active && !game.solved && game_hint_active(&game) && game.hintKind == HINT_PLACE;
+    return game.active && !game.solved && game_hint_active(&game) && game.hintKind == HINT_PLACE && !variant;
 #endif
 }
 
@@ -510,13 +638,13 @@ static BoardView *current;
     if (pendingLevel >= 0) return;
     int t = [self targetAt:p];
     downTarget = t;
-    if (t >= 0 && t < 81) [self finish:game_tap(&game, t)];
+    if (t >= 0 && t < 100) [self finish:game_tap(&game, t)];
 }
 
 - (void)moveAt:(CGPoint)p {
     if ([self overlay] || pendingLevel >= 0) return;
     int t = [self targetAt:p];
-    if (t >= 0 && t < 81 && t != downTarget) {
+    if (t >= 0 && t < 100 && t != downTarget) {
         downTarget = -1;
         if (game.active && game.selected != t) {
             game_select(&game, t);
@@ -545,6 +673,7 @@ static BoardView *current;
 }
 
 - (void)act:(int)t {
+    if (t >= 100 && t < 109 && t - 99 > game.n) return;
     BOOL changed = NO;
     if (t >= 100 && t < 109 && colorMode) changed = t - 99 <= 7 && game_paint(&game, t - 99 <= 6 ? t - 99 : 0);
     else if (t >= 100 && t < 109) changed = game_key(&game, t - 99);
@@ -559,7 +688,7 @@ static BoardView *current;
         changed = YES;
     }
     else if (t == 203) changed = game_fill_notes(&game);
-    else if (t == 204) changed = game_hint(&game, &engine);
+    else if (t == 204) changed = variant ? game_hint_variant(&game, variant) : game_hint(&game, &engine);
     else if (t == 300) {
         [self openMenu];
         return;
@@ -580,7 +709,7 @@ static BoardView *current;
         [self stopTimer];
         if (!recorded) {
             recorded = YES;
-            recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate);
+            if (!variant) recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate);
         }
     }
     if (changed) saveGame();
@@ -655,7 +784,7 @@ static BoardView *current;
 - (NSString *)hintMessage {
     if (game.hintKind == HINT_WRONG) return text[S_WRONG];
     int u = game.hintUnit;
-    NSString *s = [text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : S_NAKED] stringByReplacingOccurrencesOfString:@"#" withString:DIGITS[game.hintDigit]];
+    NSString *s = [text[u == 0 ? S_ROW : u == 1 ? S_COL : u == 2 ? S_BOX : u == 4 ? S_DIAG : u == 5 ? S_REVEAL : S_NAKED] stringByReplacingOccurrencesOfString:@"#" withString:DIGITS[game.hintDigit]];
     int t = game.hintTech;
     if (t > 0) s = [NSString stringWithFormat:@"%@ (%@)", s, text[t < 7 ? S_TECH + t - 1 : S_TECH_EXTRA + t - 7]];
     return s;
@@ -790,12 +919,23 @@ static BoardView *current;
 }
 
 - (void)buildMenu {
-    BOOL solved = game.active && game.solved;
     int n = 0;
+    if (variantsOpen) {
+        for (int k = 0; k < 4; k++) { menuItems[n][0] = 441 + k; menuItemCount[n++] = 1; }
+        menuRows = n;
+        return;
+    }
+    BOOL solved = game.active && game.solved;
+    BOOL variants = menuKind >= 0;
+    int levels = variants ? VARIANT_LEVELS : SUDOKU_LEVELS;
     if (solved && [self canShare]) { menuItems[n][0] = 412; menuItemCount[n++] = 1; }
-    for (int level = 0; level < 5; level++) { menuItems[n][0] = 400 + level; menuItemCount[n++] = 1; }
+    for (int level = 0; level < levels; level++) { menuItems[n][0] = 400 + level; menuItemCount[n++] = 1; }
     menuItems[n][0] = 405; menuItems[n][1] = 408; menuItemCount[n++] = 2;
-    menuItems[n][0] = 409; menuItems[n][1] = 411; menuItemCount[n++] = 2;
+    if (variants) { menuItems[n][0] = 409; menuItems[n][1] = 413; menuItemCount[n++] = 2; }
+    else {
+        menuItems[n][0] = 409; menuItems[n][1] = 411; menuItemCount[n++] = 2;
+        menuItems[n][0] = 413; menuItemCount[n++] = 1;
+    }
     if ([self cancellable]) {
         menuItems[n][0] = 406; menuItemCount[n++] = 1;
         menuItems[n][0] = 407; menuItemCount[n++] = 1;
@@ -804,6 +944,7 @@ static BoardView *current;
 }
 
 - (int)titleLines {
+    if (variantsOpen) return 1;
     BOOL solved = game.active && game.solved;
     BOOL dated = solved ? dailyDate.length > 0 : dailyMenu;
     return 2 + (solved ? 1 : 0) + (dated ? 1 : 0);
@@ -858,11 +999,16 @@ static BoardView *current;
     return [NSDateFormatter localizedStringFromDate:dateOf(day) dateStyle:NSDateFormatterLongStyle timeStyle:NSDateFormatterNoStyle];
 }
 
+- (NSString *)gameName {
+    return variant ? text[S_VARIANT_NAME + variant->shape.kind] : @"";
+}
+
 - (NSArray *)titleTexts {
+    if (variantsOpen) return @[text[S_VARIANTS]];
     BOOL solved = game.active && game.solved;
     NSMutableArray *lines = [NSMutableArray array];
-    [lines addObject:text[solved ? S_SOLVED : dailyMenu ? S_DAILY : S_TITLE]];
-    if (solved) [lines addObject:[NSString stringWithFormat:@"%@  %@", [self levelText], [self clockString:game_time(&game, 0)]]];
+    [lines addObject:solved ? text[S_SOLVED] : dailyMenu ? text[S_DAILY] : menuKind >= 0 ? text[S_VARIANT_NAME + menuKind] : text[S_TITLE]];
+    if (solved) [lines addObject:[NSString stringWithFormat:@"%@%@  %@", variant ? [[self gameName] stringByAppendingString:@" \u00b7 "] : @"", [self levelText], [self clockString:game_time(&game, 0)]]];
     if (solved ? dailyDate.length > 0 : dailyMenu) [lines addObject:[self dateText:solved ? dailyDate : todayKey()]];
     [lines addObject:text[S_NEW]];
     return lines;
@@ -910,6 +1056,19 @@ static BoardView *current;
 }
 
 - (void)menuAction:(int)t {
+    if (variantsOpen) {
+        if (t >= 441 && t <= 443) {
+            menuKind = VARIANT_ORDER[t - 441];
+            dailyMenu = NO;
+        }
+        if ((t >= 441 && t <= 444) || t == 499) {
+            variantsOpen = NO;
+            menuCursor = 0;
+            [self setNeedsDisplay];
+            UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+        }
+        return;
+    }
     if (t >= 400 && t < 405) {
         [self startGame:t - 400];
     } else if (t == 405) {
@@ -921,7 +1080,13 @@ static BoardView *current;
         [[NSUserDefaults standardUserDefaults] setObject:showTimer ? @"1" : @"0" forKey:@"t"];
         [self setNeedsDisplay];
     } else if (t == 409) {
-        dailyMenu = !dailyMenu;
+        if (menuKind >= 0) menuKind = -1;
+        else dailyMenu = !dailyMenu;
+        [self setNeedsDisplay];
+        UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+    } else if (t == 413) {
+        variantsOpen = YES;
+        menuCursor = 0;
         [self setNeedsDisplay];
         UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
     } else if (t == 411) {
@@ -941,6 +1106,7 @@ static BoardView *current;
 
 - (NSString *)shareText {
     NSString *result = [NSString stringWithFormat:@"%@ \u00b7 %@", [self levelText], [self clockString:game_time(&game, 0)]];
+    if (variant) return [NSString stringWithFormat:@"%@ \u00b7 %@\n%@%@%@", [self gameName], result, SITE, [self langPath], VARIANT_PATHS[variant->shape.kind]];
     if (dailyDate.length) return [NSString stringWithFormat:@"%@ %@ \u00b7 %@\n%@%@daily/", text[S_DAILY], [self dateText:dailyDate], result, SITE, [self langPath]];
     return [NSString stringWithFormat:@"%@ \u00b7 %@\n%@%@?p=%@", text[S_TITLE], result, SITE, [self langPath], digitString(game.given)];
 }
@@ -1043,7 +1209,8 @@ static BoardView *current;
     menuOpen = NO;
     statsOpen = NO;
     idle = NO;
-    NSString *day = dailyMenu ? todayKey() : @"";
+    int kind = menuKind;
+    NSString *day = dailyMenu && kind < 0 ? todayKey() : @"";
     game_pause(&game, nowMs());
     [self stopTimer];
     wasGenerating = YES;
@@ -1051,19 +1218,28 @@ static BoardView *current;
     [self setNeedsDisplay];
     UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        Sudoku *worker = malloc(sizeof(Sudoku));
-        int *puzzle = malloc(sizeof(int) * 81);
-        sudoku_init(worker, ((uint64_t)arc4random() << 32) ^ arc4random());
-        if (day.length) sudoku_seed(worker, dailySeed(day, level));
-        sudoku_generate(worker, level, puzzle);
+        int *puzzle = calloc(81, sizeof(int));
+        Variant *shaped = NULL;
+        Sudoku *worker = NULL;
+        if (kind >= 0) {
+            shaped = malloc(sizeof(Variant));
+            variant_init(shaped, kind, arc4random());
+            variant_generate(shaped, level, puzzle);
+        } else {
+            worker = malloc(sizeof(Sudoku));
+            sudoku_init(worker, ((uint64_t)arc4random() << 32) ^ arc4random());
+            if (day.length) sudoku_seed(worker, dailySeed(day, level));
+            sudoku_generate(worker, level, puzzle);
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
-            game_start(&game, puzzle, worker->solution, level);
-            game.rating = worker->rating;
+            useVariant(shaped);
+            game_start(&game, puzzle, shaped ? shaped->solution : worker->solution, level);
+            game.rating = shaped ? 0 : worker->rating;
             free(puzzle);
             free(worker);
             dailyDate = day;
             recorded = NO;
-            recordStart(level);
+            if (!shaped) recordStart(level);
             saveGame();
             pendingLevel = -1;
             [current setNeedsDisplay];
@@ -1074,6 +1250,7 @@ static BoardView *current;
 
 - (void)openMenu {
     menuOpen = YES;
+    variantsOpen = NO;
     menuCursor = 0;
     game_pause(&game, nowMs());
     [self stopTimer];
@@ -1084,6 +1261,7 @@ static BoardView *current;
 - (void)closeMenu {
     menuOpen = NO;
     statsOpen = NO;
+    variantsOpen = NO;
     idle = NO;
     lastInput = nowMs();
     [self resumeIfAllowed];
@@ -1092,18 +1270,19 @@ static BoardView *current;
 
 - (void)moveSelection:(int)dir {
     if (!game.active || game.solved) return;
+    int n = game.n;
     int i = game.selected < 0 ? 0 : game.selected;
-    int r = SUDOKU_ROW[i], c = SUDOKU_COL[i];
-    if (dir == 0) r = (r + 8) % 9;
-    else if (dir == 1) r = (r + 1) % 9;
-    else if (dir == 2) c = (c + 8) % 9;
-    else c = (c + 1) % 9;
-    game_select(&game, r * 9 + c);
+    int r = i / n, c = i % n;
+    if (dir == 0) r = (r + n - 1) % n;
+    else if (dir == 1) r = (r + 1) % n;
+    else if (dir == 2) c = (c + n - 1) % n;
+    else c = (c + 1) % n;
+    game_select(&game, r * n + c);
     [self setNeedsDisplay];
 }
 
 - (CGRect)targetRect:(int)t {
-    if (t < 81) return CGRectMake(boardX + SUDOKU_COL[t] * cell, boardY + SUDOKU_ROW[t] * cell, cell, cell);
+    if (t < 100) return CGRectMake(boardX + (t % game.n) * cell, boardY + (t / game.n) * cell, cell, cell);
     if (t < 109) return CGRectMake(keyX[t - 100], keyY[t - 100], keyW, keyH);
     if (t < 200 + TOOLS) return CGRectMake(toolX[t - 200], toolY, toolW, toolH);
     return CGRectMake(topX + topW - topH * 0.9, topY, topH * 0.9, topH);
@@ -1115,7 +1294,7 @@ static BoardView *current;
     int best = from;
     CGFloat bestScore = 1e9;
     for (int t = 0; t <= 300; t++) {
-        if (t == from || (t > 80 && t < 100) || (t > 108 && t < 200) || (t >= 200 + TOOLS && t < 300)) continue;
+        if (t == from || (t >= game.size && t < 100) || (t >= 100 + game.n && t < 200) || (t >= 200 + TOOLS && t < 300)) continue;
         CGRect b = [self targetRect:t];
         CGFloat dx = CGRectGetMidX(b) - ax, dy = CGRectGetMidY(b) - ay;
         CGFloat primary = dir == 0 ? -dy : dir == 1 ? dy : dir == 2 ? -dx : dx;
@@ -1207,6 +1386,10 @@ static BoardView *current;
             [self menuAction:[self menuFlatTarget:menuCursor]];
             return YES;
         }
+        if ((menu || escape) && variantsOpen) {
+            [self menuAction:444];
+            return YES;
+        }
         if ((menu || escape || play) && [self cancellable]) {
             [self closeMenu];
             return YES;
@@ -1237,7 +1420,7 @@ static BoardView *current;
         return YES;
     }
     if (select) {
-        if (cursor < 81) [self finish:game_tap(&game, cursor)];
+        if (cursor < 100) [self finish:game_tap(&game, cursor)];
         else [self act:cursor];
         return YES;
     }
@@ -1271,7 +1454,9 @@ static BoardView *current;
     if (target < 405) return [self levelName:target - 400];
     if (target == 405) return [NSString stringWithFormat:@"%@: %@", text[S_ERRORS], text[game.showErrors ? S_ON : S_OFF]];
     if (target == 408) return [NSString stringWithFormat:@"%@: %@", text[S_TIMER], text[showTimer ? S_ON : S_OFF]];
-    if (target == 409) return text[dailyMenu ? S_PLAY : S_DAILY];
+    if (target == 409) return text[dailyMenu || menuKind >= 0 ? S_PLAY : S_DAILY];
+    if (target == 413) return text[S_VARIANTS];
+    if (target >= 441 && target <= 443) return text[S_VARIANT_NAME + VARIANT_ORDER[target - 441]];
     if (target == 411) return text[S_STATS];
     if (target == 412) return text[S_SHARE];
     return text[target == 406 ? S_RESTART : S_CANCEL];
@@ -1301,7 +1486,9 @@ static BoardView *current;
     if (v != 0) {
         BOOL wrong = game_conflict(&game, i) || game_wrong(&game, i);
         NSString *digit = wrong ? [NSString stringWithFormat:@"%@, %@", DIGITS[v], text[S_WRONG]] : DIGITS[v];
-        return game.color[i] ? [NSString stringWithFormat:@"%@, %@ %d", digit, text[S_COLOR], game.color[i]] : digit;
+        if (game.color[i]) digit = [NSString stringWithFormat:@"%@, %@ %d", digit, text[S_COLOR], game.color[i]];
+        NSString *cage = [self cageLabel:i];
+        return cage ? [NSString stringWithFormat:@"%@, %@", digit, cage] : digit;
     }
     NSMutableArray *parts = [NSMutableArray array];
     if (game.notes[i] != 0) {
@@ -1315,7 +1502,14 @@ static BoardView *current;
         [parts addObject:corner];
     }
     if (game.color[i] != 0) [parts addObject:[NSString stringWithFormat:@"%@ %d", text[S_COLOR], game.color[i]]];
+    NSString *cage = [self cageLabel:i];
+    if (cage) [parts addObject:cage];
     return parts.count ? [parts componentsJoinedByString:@", "] : nil;
+}
+
+- (NSString *)cageLabel:(int)i {
+    if (!variant || !variant_cage_head(&variant->shape, i)) return nil;
+    return [text[S_CAGE] stringByReplacingOccurrencesOfString:@"#" withString:@(variant->shape.cageSum[variant->shape.cageOf[i]]).stringValue];
 }
 
 - (NSArray *)accessibilityElements {
@@ -1342,8 +1536,10 @@ static BoardView *current;
         }
         return list;
     }
+    [self syncLayout];
     BOOL playable = game.active && !game.solved;
-    NSString *top = game.active ? (showTimer ? [NSString stringWithFormat:@"%@, %@", [self levelText], [self clockString:game_time(&game, nowMs())]] : [self levelText]) : @"";
+    NSString *level = variant ? [NSString stringWithFormat:@"%@, %@", [self gameName], [self levelText]] : [self levelText];
+    NSString *top = game.active ? (showTimer ? [NSString stringWithFormat:@"%@, %@", level, [self clockString:game_time(&game, nowMs())]] : level) : @"";
     [list addObject:[self axElement:301 frame:CGRectMake(topX, topY, topW - topH * 0.9, topH) label:top value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
     [list addObject:[self axElement:300 frame:[self targetRect:300] label:text[S_NEW] value:nil traits:UIAccessibilityTraitButton]];
     if (game.active && game_hint_active(&game)) {
@@ -1352,14 +1548,14 @@ static BoardView *current;
         if ([self explainable]) message = [NSString stringWithFormat:@"%@. %@", message, text[S_EXPLAIN]];
         [list addObject:[self axElement:302 frame:CGRectMake(msgX, msgY, msgW, msgH) label:message value:nil traits:[self explainable] ? UIAccessibilityTraitButton : UIAccessibilityTraitStaticText]];
     }
-    for (int i = 0; i < 81; i++) {
-        NSString *label = [NSString stringWithFormat:@"%@ %d, %@ %d", text[S_ROWLABEL], SUDOKU_ROW[i] + 1, text[S_COLLABEL], SUDOKU_COL[i] + 1];
+    for (int i = 0; i < game.size; i++) {
+        NSString *label = [NSString stringWithFormat:@"%@ %d, %@ %d", text[S_ROWLABEL], i / game.n + 1, text[S_COLLABEL], i % game.n + 1];
         UIAccessibilityTraits traits = UIAccessibilityTraitButton;
         if (i == game.selected) traits |= UIAccessibilityTraitSelected;
         if (!playable) traits |= UIAccessibilityTraitNotEnabled;
         [list addObject:[self axElement:i frame:[self targetRect:i] label:label value:game.active ? [self cellValue:i] : nil traits:traits]];
     }
-    for (int d = 1; d <= 9; d++) {
+    for (int d = 1; d <= game.n; d++) {
         if (colorMode) {
             UIAccessibilityTraits traits = UIAccessibilityTraitButton;
             if (!playable || d > 7 || game.selected < 0) traits |= UIAccessibilityTraitNotEnabled;
@@ -1367,7 +1563,7 @@ static BoardView *current;
             [list addObject:[self axElement:99 + d frame:[self targetRect:99 + d] label:label value:nil traits:traits]];
             continue;
         }
-        int left = game.active ? MAX(0, game_remaining(&game, d)) : 9;
+        int left = game.active ? MAX(0, game_remaining(&game, d)) : game.n;
         UIAccessibilityTraits traits = UIAccessibilityTraitButton;
         if (d == game.sticky) traits |= UIAccessibilityTraitSelected;
         if (!playable || left == 0) traits |= UIAccessibilityTraitNotEnabled;
@@ -1394,7 +1590,7 @@ static BoardView *current;
         } else if (t >= 400 && t != 410 && t != 420) [self menuAction:t];
         return;
     }
-    if (t < 81) [self finish:game_tap(&game, t)];
+    if (t < 100) [self finish:game_tap(&game, t)];
     else if (t == 302) {
         if ([self explainable]) [self act:t];
     } else if (t >= 100) [self act:t];
@@ -1421,7 +1617,7 @@ static BoardView *current;
 }
 
 - (CGPoint)cellPoint:(int)i {
-    return CGPointMake(boardX + (SUDOKU_COL[i] + 0.5) * cell, boardY + (SUDOKU_ROW[i] + 0.5) * cell);
+    return CGPointMake(boardX + (i % game.n + 0.5) * cell, boardY + (i / game.n + 0.5) * cell);
 }
 
 - (void)selftest:(NSNumber *)stepNumber {
@@ -1436,6 +1632,26 @@ static BoardView *current;
     else if (step == 7) [self press:[self menuPointOf:407]];
     NSLog(@"selftest %d: active=%d pending=%d sel=%d sticky=%d note=%d v0=%d given0=%d n1=%d given1=%d hint=%d menu=%d rows=%d", step, game.active, pendingLevel, game.selected, game.sticky, game.noteMode, game.value[0], game.given[0], game.notes[1], game.given[1], game.hintKind, menuOpen, menuRows);
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
+}
+
+- (void)variants:(NSNumber *)stepNumber {
+    int step = stepNumber.intValue;
+    if (pendingLevel >= 0) {
+        [self performSelector:@selector(variants:) withObject:stepNumber afterDelay:0.5];
+        return;
+    }
+    static const int menuSteps[3][3] = {{441, 401, 0}, {442, 402, 0}, {443, 400, 0}};
+    CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
+    int round = step / 5, phase = step % 5;
+    if (round < 3) {
+        if (phase == 0) { if (!menuOpen) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)]; [self press:[self menuPointOf:413]]; }
+        else if (phase == 1) [self press:[self menuPointOf:menuSteps[round][0]]];
+        else if (phase == 2) [self press:[self menuPointOf:menuSteps[round][1]]];
+        else if (phase == 3) { [self press:hint]; [self snapshot:[NSString stringWithFormat:@"v%d-hint", round]]; [self axDump:step]; }
+        else { [self press:hint]; [self press:CGPointMake(toolX[3] + toolW / 2, toolY + toolH / 2)]; [self snapshot:[NSString stringWithFormat:@"v%d-notes", round]]; }
+    }
+    NSLog(@"variants %d: kind=%d size=%d n=%d active=%d hint=%d menu=%d variantsOpen=%d", step, variant ? variant->shape.kind : -1, game.size, game.n, game.active, game.hintKind, menuOpen, variantsOpen);
+    if (step < 14) [self performSelector:@selector(variants:) withObject:@(step + 1) afterDelay:1.0];
 }
 
 - (void)snapshot:(NSString *)name {
@@ -1521,7 +1737,8 @@ static BoardView *current;
     static BOOL started;
     if (getenv("BARESUDOKU_SELFTEST") && !started) {
         started = YES;
-        SEL run = strcmp(getenv("BARESUDOKU_SELFTEST"), "demo") == 0 ? @selector(demo:) : @selector(selftest:);
+        const char *mode = getenv("BARESUDOKU_SELFTEST");
+        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "variants") == 0 ? @selector(variants:) : @selector(selftest:);
         [current performSelector:run withObject:@0 afterDelay:1.5];
     }
 #endif
@@ -1543,12 +1760,14 @@ static BoardView *current;
     sudoku_init(&engine, ((uint64_t)arc4random() << 32) ^ arc4random());
     game_init(&game);
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    game_decode(&game, [defaults stringForKey:@"g"].UTF8String);
+    if (restoreVariant(defaults)) game_decode(&game, [defaults stringForKey:@"g"].UTF8String);
+    if (!game.active) useVariant(NULL);
     dailyDate = game.active ? ([defaults stringForKey:@"dd"] ?: @"") : @"";
     dailyMenu = dailyDate.length > 0;
+    menuKind = variant ? variant->shape.kind : -1;
     showTimer = ![[defaults stringForKey:@"t"] isEqualToString:@"0"];
     recorded = game.solved;
-    if (game.active) game.rating = sudoku_rate(&engine, game.given);
+    if (game.active && !variant) game.rating = sudoku_rate(&engine, game.given);
     [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidResignKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) { [current focusChanged:NO]; }];
     [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) { [current focusChanged:YES]; }];
     return YES;
