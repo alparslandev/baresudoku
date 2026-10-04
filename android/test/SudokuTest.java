@@ -37,6 +37,7 @@ final class SudokuTest {
         gameTests(engine);
         stickyTests(engine);
         cornerTests(engine);
+        variantTests();
         System.out.println(failures == 0 ? "TAMAM" : "HATA: " + failures);
         if (failures != 0) System.exit(1);
     }
@@ -113,6 +114,75 @@ final class SudokuTest {
         int n = 0;
         for (int v : values) if (v != 0) n++;
         return n;
+    }
+
+    static boolean unitsOk(Variant v, int[] grid) {
+        Variant.Shape s = v.shape;
+        for (int u = 0; u < s.unitCount; u++) {
+            int m = 0;
+            for (int k = 0; k < s.n; k++) m |= 1 << (grid[s.unitCells[u * 9 + k]] - 1);
+            if (m != s.all) return false;
+        }
+        for (int k = 0; k < s.cageCount; k++) {
+            int m = 0, sum = 0;
+            for (int i = 0; i < s.cageSize[k]; i++) {
+                int d = grid[s.cageCells[k * 9 + i]];
+                if ((m & (1 << (d - 1))) != 0) return false;
+                m |= 1 << (d - 1);
+                sum += d;
+            }
+            if (sum != s.cageSum[k]) return false;
+        }
+        return true;
+    }
+
+    static void variantTests() {
+        for (int kind = 0; kind < 3; kind++) {
+            for (int level = 0; level < Variant.LEVELS; level++) {
+                Variant v = new Variant(kind, 1000 + level);
+                int[] puzzle = v.generate(level);
+                int size = v.shape.size;
+                int[] solution = Arrays.copyOf(v.solution, size);
+                check(puzzle.length == size, "varyant bulmaca boyu");
+                check(v.countSolutions(puzzle, 2) == 1, "varyant tek cozumlu degil");
+                check(Arrays.equals(Arrays.copyOf(v.found, size), solution), "varyant cozumu tam izgarayla eslesmiyor");
+                check(unitsOk(v, solution), "varyant cozumu birim ya da kafes kuralini bozuyor");
+                for (int c = 0; c < size; c++) if (puzzle[c] != 0) check(puzzle[c] == solution[c], "varyant verileni cozumle uyusmuyor");
+                check(Arrays.equals(new Variant(kind, 1000 + level).generate(level), puzzle), "ayni tohum farkli varyant bulmacasi");
+            }
+            Variant v = new Variant(kind, 77);
+            int[] puzzle = v.generate(1);
+            int size = v.shape.size;
+            int[] solution = Arrays.copyOf(v.solution, size);
+            Game g = new Game();
+            g.setShape(v.shape);
+            g.start(puzzle, solution, 1);
+            int ones = 0;
+            for (int d : puzzle) if (d == 1) ones++;
+            check(g.remaining(1) == v.shape.n - ones, "varyant kalan sayisi");
+            int cell = 0;
+            while (puzzle[cell] != 0) cell++;
+            int peer = -1;
+            for (int p : g.peers[cell]) if (peer < 0 && puzzle[p] != 0) peer = p;
+            g.select(cell);
+            check(g.enter(puzzle[peer]) && g.conflict(cell), "varyant cakismasi eslere gore degil");
+            check(g.undo(), "varyant geri alma");
+            check(!g.key(v.shape.n + 1), "alan disi rakam kabul edildi");
+            check(g.fillNotes(), "varyant notlari doldurulmadi");
+            for (int c = 0; c < size; c++) if (g.value[c] == 0) check((g.notes[c] & Sudoku.bit(solution[c])) != 0, "varyant notunda dogru rakam yok");
+            for (int steps = 0; !g.solved && steps < 200; steps++) {
+                check(g.hint(v), "varyant ipucu bulunamadi");
+                check(g.hint(v), "varyant ipucu yerlestirmedi");
+            }
+            check(g.solved, "varyant ipucu yolu bulmacayi cozmedi");
+            String saved = g.encode(0);
+            Game h = new Game();
+            h.setShape(v.shape);
+            check(h.decode(saved) && Arrays.equals(Arrays.copyOf(h.value, size), solution), "varyant kaydi geri yuklenmedi");
+            if (size != 81) check(!new Game().decode(saved), "6x6 kaydi klasik oyuna yuklendi");
+        }
+        Variant a = new Variant(Variant.KIND_MINI), b = new Variant(Variant.KIND_MINI);
+        check(!Arrays.equals(a.generate(1), b.generate(1)), "tohumsuz iki varyant ayni bulmacayi uretti");
     }
 
     static void check(boolean ok, String what) {
