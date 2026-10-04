@@ -296,6 +296,93 @@ static void registryTests(void) {
     check((int)(sizeof(LEVEL_NAMES) / sizeof(LEVEL_NAMES[0])) >= SUDOKU_LEVELS, "seviye adi eksik");
 }
 
+static int unitsOk(const Variant *v, const int *grid) {
+    const VariantShape *s = &v->shape;
+    for (int u = 0; u < s->unitCount; u++) {
+        int m = 0;
+        for (int k = 0; k < s->n; k++) m |= 1 << (grid[s->unitCells[u * 9 + k]] - 1);
+        if (m != s->all) return 0;
+    }
+    for (int k = 0; k < s->cageCount; k++) {
+        int m = 0, sum = 0;
+        for (int i = 0; i < s->cageSize[k]; i++) {
+            int d = grid[s->cageCells[k * 9 + i]];
+            if ((m & (1 << (d - 1))) != 0) return 0;
+            m |= 1 << (d - 1);
+            sum += d;
+        }
+        if (sum != s->cageSum[k]) return 0;
+    }
+    return 1;
+}
+
+static Variant variantA;
+static Variant variantB;
+
+static void variantTests(void) {
+    for (int kind = 0; kind < 3; kind++) {
+        for (int level = 0; level < VARIANT_LEVELS; level++) {
+            Variant *v = &variantA;
+            variant_init(v, kind, (uint32_t)(1000 + level));
+            int puzzle[81] = {0};
+            variant_generate(v, level, puzzle);
+            int size = v->shape.size;
+            int solution[81] = {0};
+            memcpy(solution, v->solution, sizeof(int) * (size_t)size);
+            check(variant_count_solutions(v, puzzle, 2) == 1, "varyant tek cozumlu degil");
+            check(memcmp(v->found, solution, sizeof(int) * (size_t)size) == 0, "varyant cozumu tam izgarayla eslesmiyor");
+            check(unitsOk(v, solution), "varyant cozumu birim ya da kafes kuralini bozuyor");
+            for (int c = 0; c < size; c++) if (puzzle[c] != 0) check(puzzle[c] == solution[c], "varyant verileni cozumle uyusmuyor");
+            int again[81] = {0};
+            variant_init(&variantB, kind, (uint32_t)(1000 + level));
+            variant_generate(&variantB, level, again);
+            check(memcmp(again, puzzle, sizeof(int) * (size_t)size) == 0, "ayni tohum farkli varyant bulmacasi");
+        }
+        Variant *v = &variantA;
+        variant_init(v, kind, 77);
+        int puzzle[81] = {0};
+        variant_generate(v, 1, puzzle);
+        int size = v->shape.size;
+        int solution[81] = {0};
+        memcpy(solution, v->solution, sizeof(int) * (size_t)size);
+        Game g;
+        game_init(&g);
+        game_set_shape(&g, &v->shape);
+        game_start(&g, puzzle, solution, 1);
+        int ones = 0;
+        for (int c = 0; c < size; c++) if (puzzle[c] == 1) ones++;
+        check(game_remaining(&g, 1) == v->shape.n - ones, "varyant kalan sayisi");
+        int cell = 0;
+        while (puzzle[cell] != 0) cell++;
+        int peer = -1;
+        for (int k = 0; k < g.peerCount[cell] && peer < 0; k++) if (puzzle[g.peers[cell][k]] != 0) peer = g.peers[cell][k];
+        game_select(&g, cell);
+        check(game_enter(&g, puzzle[peer]) && game_conflict(&g, cell), "varyant cakismasi eslere gore degil");
+        check(game_undo(&g), "varyant geri alma");
+        check(!game_key(&g, v->shape.n + 1), "alan disi rakam kabul edildi");
+        check(game_fill_notes(&g), "varyant notlari doldurulmadi");
+        for (int c = 0; c < size; c++) if (g.value[c] == 0) check((g.notes[c] & sudoku_bit(solution[c])) != 0, "varyant notunda dogru rakam yok");
+        for (int steps = 0; !g.solved && steps < 200; steps++) {
+            check(game_hint_variant(&g, v), "varyant ipucu bulunamadi");
+            check(game_hint_variant(&g, v), "varyant ipucu yerlestirmedi");
+        }
+        check(g.solved, "varyant ipucu yolu bulmacayi cozmedi");
+        char *saved = game_encode(&g, 0);
+        Game h;
+        game_init(&h);
+        game_set_shape(&h, &v->shape);
+        check(game_decode(&h, saved) && memcmp(h.value, solution, sizeof(int) * (size_t)size) == 0, "varyant kaydi geri yuklenmedi");
+        Game classic;
+        game_init(&classic);
+        if (size != 81) check(!game_decode(&classic, saved), "6x6 kaydi klasik oyuna yuklendi");
+        game_free(&classic);
+        game_free(&h);
+        game_free(&g);
+        free(saved);
+    }
+    printf("Varyant testleri gecti\n");
+}
+
 static Sudoku engine;
 
 int main(int argc, char **argv) {
@@ -332,6 +419,7 @@ int main(int argc, char **argv) {
     gameTests(&engine);
     stickyTests(&engine);
     cornerTests(&engine);
+    variantTests();
     printf("%s\n", failures == 0 ? "TAMAM" : "HATA");
     return failures == 0 ? 0 : 1;
 }
