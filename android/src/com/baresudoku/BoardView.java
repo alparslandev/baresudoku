@@ -470,7 +470,7 @@ final class BoardView extends View implements Runnable {
             openMenu();
             return;
         } else if (t == 302) {
-            host.open(SITE + langPath() + "solver/?p=" + digits(game.value));
+            host.open(SITE + langPath() + "solver/?p=" + digits(game.value) + "&hint=" + game.hintCell + "&tech=" + game.hintTech + "&d=" + game.hintDigit);
             return;
         }
         finish(changed);

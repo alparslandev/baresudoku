@@ -565,7 +565,7 @@ static BoardView *current;
         return;
     } else if (t == 302) {
 #if !TARGET_OS_TV
-        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@solver/?p=%@", SITE, [self langPath], digitString(game.value)]];
+        NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@solver/?p=%@&hint=%d&tech=%d&d=%d", SITE, [self langPath], digitString(game.value), game.hintCell, game.hintTech, game.hintDigit]];
         [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 #endif
         return;
