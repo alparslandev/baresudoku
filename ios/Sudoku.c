@@ -409,7 +409,6 @@ static void fillLineMasks(Sudoku *s, int b, int t) {
 }
 
 static int fish(Sudoku *s, int size) {
-    int changed = 0;
     for (int d = 1; d <= 9; d++) {
         int b = sudoku_bit(d);
         for (int t = 0; t < 2; t++) {
@@ -422,20 +421,20 @@ static int fish(Sudoku *s, int size) {
                     if (m2 == 0 || __builtin_popcount(m2) > size) continue;
                     int u2 = m1 | m2;
                     if (size == 2) {
-                        if (__builtin_popcount(u2) == 2) changed |= fishDrop(s, b, t, u2, (1 << l1) | (1 << l2));
+                        if (__builtin_popcount(u2) == 2 && fishDrop(s, b, t, u2, (1 << l1) | (1 << l2))) return 1;
                     } else if (__builtin_popcount(u2) <= 3) {
                         for (int l3 = l2 + 1; l3 < 9; l3++) {
                             int m3 = s->lineMasks[l3];
                             if (m3 == 0 || __builtin_popcount(m3) > 3) continue;
                             int u3 = u2 | m3;
-                            if (__builtin_popcount(u3) == 3) changed |= fishDrop(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
+                            if (__builtin_popcount(u3) == 3 && fishDrop(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return 1;
                         }
                     }
                 }
             }
         }
     }
-    return changed;
+    return 0;
 }
 
 static int clearSeeing(Sudoku *s, int z, int c1, int c2, int c3) {
@@ -852,28 +851,34 @@ static int dropSeeingCorners(Sudoku *s, int digits, int members) {
     return changed;
 }
 
-static int urExtra(Sudoku *s, int diagonal) {
+static int pairInAllCorners(Sudoku *s) {
     const int *corners = s->corners;
     for (int k = 0; k < 4; k++) {
         int m = s->lc[corners[k]];
-        if (__builtin_popcount(m) != 2) continue;
-        int floors = 0;
-        int roofs = 0;
-        int extra = 0;
-        for (int i = 0; i < 4; i++) {
-            int v = s->lc[corners[i]];
-            if (v == m) {
-                floors |= 1 << i;
-            } else if ((v & m) == m && __builtin_popcount(v) == 3 && (extra == 0 || (v & ~m) == extra)) {
-                extra = v & ~m;
-                roofs |= 1 << i;
-            }
-        }
-        if ((floors | roofs) != 15 || extra == 0 || __builtin_popcount(floors) == 3) continue;
-        int adjacent = __builtin_popcount(floors) == 2 && floors != 5 && floors != 10;
-        if (adjacent != diagonal && dropSeeingCorners(s, extra, roofs)) return 1;
+        if (__builtin_popcount(m) == 2 && (s->lc[corners[0]] & m) == m && (s->lc[corners[1]] & m) == m && (s->lc[corners[2]] & m) == m && (s->lc[corners[3]] & m) == m) return m;
     }
     return 0;
+}
+
+static int urExtra(Sudoku *s, int diagonal) {
+    const int *corners = s->corners;
+    int m = pairInAllCorners(s);
+    if (m == 0) return 0;
+    int floors = 0;
+    int roofs = 0;
+    int extra = 0;
+    for (int i = 0; i < 4; i++) {
+        int v = s->lc[corners[i]];
+        if (v == m) {
+            floors |= 1 << i;
+        } else if (__builtin_popcount(v) == 3 && (extra == 0 || (v & ~m) == extra)) {
+            extra = v & ~m;
+            roofs |= 1 << i;
+        }
+    }
+    if ((floors | roofs) != 15 || extra == 0 || __builtin_popcount(floors) == 3) return 0;
+    int adjacent = __builtin_popcount(floors) == 2 && floors != 5 && floors != 10;
+    return adjacent != diagonal && dropSeeingCorners(s, extra, roofs);
 }
 
 static int urSubset(Sudoku *s, const int *cells, int r1, int r2, int extra) {
@@ -964,11 +969,11 @@ static int urType6(Sudoku *s) {
 
 static int hiddenRectangle(Sudoku *s) {
     const int *corners = s->corners;
+    int m = pairInAllCorners(s);
+    if (m == 0) return 0;
     for (int k = 0; k < 4; k++) {
         int a = corners[k];
-        int m = s->lc[a];
-        if (__builtin_popcount(m) != 2) continue;
-        if ((s->lc[corners[0]] & m) != m || (s->lc[corners[1]] & m) != m || (s->lc[corners[2]] & m) != m || (s->lc[corners[3]] & m) != m) continue;
+        if (s->lc[a] != m) continue;
         int d = corners[(k + 2) & 3];
         for (int rest = m; rest != 0; rest &= rest - 1) {
             int x = rest & -rest;

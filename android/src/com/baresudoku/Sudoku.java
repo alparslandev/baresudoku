@@ -402,7 +402,6 @@ final class Sudoku {
     }
 
     boolean fish(int size) {
-        boolean changed = false;
         for (int d = 1; d <= 9; d++) {
             int b = bit(d);
             for (int t = 0; t < 2; t++) {
@@ -415,20 +414,20 @@ final class Sudoku {
                         if (m2 == 0 || Integer.bitCount(m2) > size) continue;
                         int u2 = m1 | m2;
                         if (size == 2) {
-                            if (Integer.bitCount(u2) == 2) changed |= fishDrop(b, t, u2, (1 << l1) | (1 << l2));
+                            if (Integer.bitCount(u2) == 2 && fishDrop(b, t, u2, (1 << l1) | (1 << l2))) return true;
                         } else if (Integer.bitCount(u2) <= 3) {
                             for (int l3 = l2 + 1; l3 < 9; l3++) {
                                 int m3 = lineMasks[l3];
                                 if (m3 == 0 || Integer.bitCount(m3) > 3) continue;
                                 int u3 = u2 | m3;
-                                if (Integer.bitCount(u3) == 3) changed |= fishDrop(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3));
+                                if (Integer.bitCount(u3) == 3 && fishDrop(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return true;
                             }
                         }
                     }
                 }
             }
         }
-        return changed;
+        return false;
     }
 
 
@@ -934,27 +933,32 @@ final class Sudoku {
         return changed;
     }
 
-    private boolean urExtra(boolean diagonal) {
+    private int pairInAllCorners() {
         for (int k = 0; k < 4; k++) {
             int m = lc[corners[k]];
-            if (Integer.bitCount(m) != 2) continue;
-            int floors = 0;
-            int roofs = 0;
-            int extra = 0;
-            for (int i = 0; i < 4; i++) {
-                int v = lc[corners[i]];
-                if (v == m) {
-                    floors |= 1 << i;
-                } else if ((v & m) == m && Integer.bitCount(v) == 3 && (extra == 0 || (v & ~m) == extra)) {
-                    extra = v & ~m;
-                    roofs |= 1 << i;
-                }
-            }
-            if ((floors | roofs) != 15 || extra == 0 || Integer.bitCount(floors) == 3) continue;
-            boolean adjacent = Integer.bitCount(floors) == 2 && floors != 5 && floors != 10;
-            if (adjacent != diagonal && dropSeeingCorners(extra, roofs)) return true;
+            if (Integer.bitCount(m) == 2 && (lc[corners[0]] & m) == m && (lc[corners[1]] & m) == m && (lc[corners[2]] & m) == m && (lc[corners[3]] & m) == m) return m;
         }
-        return false;
+        return 0;
+    }
+
+    private boolean urExtra(boolean diagonal) {
+        int m = pairInAllCorners();
+        if (m == 0) return false;
+        int floors = 0;
+        int roofs = 0;
+        int extra = 0;
+        for (int i = 0; i < 4; i++) {
+            int v = lc[corners[i]];
+            if (v == m) {
+                floors |= 1 << i;
+            } else if (Integer.bitCount(v) == 3 && (extra == 0 || (v & ~m) == extra)) {
+                extra = v & ~m;
+                roofs |= 1 << i;
+            }
+        }
+        if ((floors | roofs) != 15 || extra == 0 || Integer.bitCount(floors) == 3) return false;
+        boolean adjacent = Integer.bitCount(floors) == 2 && floors != 5 && floors != 10;
+        return adjacent != diagonal && dropSeeingCorners(extra, roofs);
     }
 
     private boolean urType3() {
@@ -1041,11 +1045,11 @@ final class Sudoku {
     }
 
     private boolean hiddenRectangle() {
+        int m = pairInAllCorners();
+        if (m == 0) return false;
         for (int k = 0; k < 4; k++) {
             int a = corners[k];
-            int m = lc[a];
-            if (Integer.bitCount(m) != 2) continue;
-            if ((lc[corners[0]] & m) != m || (lc[corners[1]] & m) != m || (lc[corners[2]] & m) != m || (lc[corners[3]] & m) != m) continue;
+            if (lc[a] != m) continue;
             int d = corners[(k + 2) & 3];
             for (int rest = m; rest != 0; rest &= rest - 1) {
                 int x = rest & -rest;
