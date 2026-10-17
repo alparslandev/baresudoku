@@ -2,3 +2,4 @@ build/
 *.apk
 .DS_Store
 *.p8
+.playwright-mcp/
