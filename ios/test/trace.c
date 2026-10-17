@@ -13,6 +13,27 @@ static void mix(int x) {
 
 static Sudoku engine;
 
+static void mixFigures(const Sudoku *e) {
+    mix(e->figCount);
+    int cell = 0;
+    int elim = 0;
+    for (int f = 0; f < e->figCount; f++) {
+        mix(e->figKind[f]);
+        mix(e->figDigits[f]);
+        mix(e->figA[f]);
+        mix(e->figB[f]);
+        for (; cell < e->figCellEnd[f]; cell++) mix(e->figCells[cell]);
+        for (; elim < e->figElimEnd[f]; elim++) {
+            mix(e->figElimCell[elim]);
+            mix(e->figElimMask[elim]);
+        }
+    }
+    mix(e->conflictState);
+    mix(e->conflictCell);
+    mix(e->conflictUnit);
+    mix(e->conflictDigits);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) return 2;
     FILE *f = fopen(argv[1], "r");
@@ -23,6 +44,7 @@ int main(int argc, char **argv) {
         while (*id && *id != ',') id++;
         if (*id == ',') id++;
     }
+    engine.tracing = 1;
     Sudoku *e = &engine;
     char line[256];
     int index = 0;
@@ -45,6 +67,7 @@ int main(int argc, char **argv) {
                 mix(e->stepDigit);
             }
             for (int c = 0; c < 81; c++) mix(e->lc[c]);
+            mixFigures(e);
         }
         int rating = sudoku_rate(e, puzzle);
         printf("%d %d %d %d %d ", index, steps, rating, e->rateOrder, e->rateTech);

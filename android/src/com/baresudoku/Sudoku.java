@@ -292,11 +292,11 @@ final class Sudoku {
                         cols |= 1 << COL[c];
                     }
                 }
-                if (rows != 0 && Integer.bitCount(rows) == 1) {
-                    changed |= clearLineOutsideBox(UNITS[Integer.numberOfTrailingZeros(rows)], box, b);
+                if (rows != 0 && Integer.bitCount(rows) == 1 && clearLineOutsideBox(UNITS[Integer.numberOfTrailingZeros(rows)], box, b)) {
+                    changed = unitFigure(FIG_POINTING, b, 18 + box, Integer.numberOfTrailingZeros(rows));
                 }
-                if (cols != 0 && Integer.bitCount(cols) == 1) {
-                    changed |= clearLineOutsideBox(UNITS[9 + Integer.numberOfTrailingZeros(cols)], box, b);
+                if (cols != 0 && Integer.bitCount(cols) == 1 && clearLineOutsideBox(UNITS[9 + Integer.numberOfTrailingZeros(cols)], box, b)) {
+                    changed = unitFigure(FIG_POINTING, b, 18 + box, 9 + Integer.numberOfTrailingZeros(cols));
                 }
             }
             for (int line = 0; line < 18; line++) {
@@ -307,14 +307,16 @@ final class Sudoku {
                 }
                 if (boxes != 0 && Integer.bitCount(boxes) == 1) {
                     int box = Integer.numberOfTrailingZeros(boxes);
+                    boolean claimed = false;
                     for (int k = 0; k < 9; k++) {
                         int c = UNITS[18 + box][k];
                         boolean inLine = line < 9 ? ROW[c] == line : COL[c] == line - 9;
                         if (!inLine && (lc[c] & b) != 0) {
                             lc[c] &= ~b;
-                            changed = rated(28);
+                            claimed = true;
                         }
                     }
+                    if (claimed) changed = rated(28) && unitFigure(FIG_CLAIMING, b, line, 18 + box);
                 }
             }
         }
@@ -347,12 +349,12 @@ final class Sudoku {
                     if (mb == 0 || Integer.bitCount(mb) > 3) continue;
                     int m2 = ma | mb;
                     if (Integer.bitCount(m2) == 2) {
-                        changed |= dropOutside(cells, m2, (1 << a) | (1 << b));
+                        if (dropOutside(cells, m2, (1 << a) | (1 << b))) changed = membersFigure(FIG_NAKED, m2, u, (1 << a) | (1 << b));
                     } else if (Integer.bitCount(m2) == 3) {
                         for (int c = b + 1; c < 9; c++) {
                             int mc = lc[cells[c]];
                             if (mc != 0 && (mc | m2) == m2) {
-                                if (dropOutside(cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(36);
+                                if (dropOutside(cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(36) && membersFigure(FIG_NAKED, m2, u, (1 << a) | (1 << b) | (1 << c));
                             }
                         }
                     }
@@ -372,12 +374,12 @@ final class Sudoku {
                     if (p2 == 0 || Integer.bitCount(p2) > 3) continue;
                     int u2 = p1 | p2;
                     if (Integer.bitCount(u2) == 2) {
-                        if (keepInside(cells, u2, bit(d1) | bit(d2))) changed = rated(34);
+                        if (keepInside(cells, u2, bit(d1) | bit(d2))) changed = rated(34) && membersFigure(FIG_HIDDEN, bit(d1) | bit(d2), u, u2);
                     } else if (Integer.bitCount(u2) == 3) {
                         for (int d3 = d2 + 1; d3 <= 9; d3++) {
                             int p3 = positions[d3];
                             if (p3 != 0 && (p3 | u2) == u2) {
-                                if (keepInside(cells, u2, bit(d1) | bit(d2) | bit(d3))) changed = rated(40);
+                                if (keepInside(cells, u2, bit(d1) | bit(d2) | bit(d3))) changed = rated(40) && membersFigure(FIG_HIDDEN, bit(d1) | bit(d2) | bit(d3), u, u2);
                             }
                         }
                     }
@@ -414,13 +416,13 @@ final class Sudoku {
                         if (m2 == 0 || Integer.bitCount(m2) > size) continue;
                         int u2 = m1 | m2;
                         if (size == 2) {
-                            if (Integer.bitCount(u2) == 2 && fishDrop(b, t, u2, (1 << l1) | (1 << l2))) return true;
+                            if (Integer.bitCount(u2) == 2 && fishDrop(b, t, u2, (1 << l1) | (1 << l2))) return fishFigure(b, t, (1 << l1) | (1 << l2), u2);
                         } else if (Integer.bitCount(u2) <= 3) {
                             for (int l3 = l2 + 1; l3 < 9; l3++) {
                                 int m3 = lineMasks[l3];
                                 if (m3 == 0 || Integer.bitCount(m3) > 3) continue;
                                 int u3 = u2 | m3;
-                                if (Integer.bitCount(u3) == 3 && fishDrop(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return true;
+                                if (Integer.bitCount(u3) == 3 && fishDrop(b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return fishFigure(b, t, (1 << l1) | (1 << l2) | (1 << l3), u3);
                             }
                         }
                     }
@@ -445,7 +447,7 @@ final class Sudoku {
                     if ((am & pm) == (bm & pm)) continue;
                     int z = am & bm & ~pm;
                     if (Integer.bitCount(z) != 1) continue;
-                    if (clearSeeing(z, peers[a], peers[b], -1)) return true;
+                    if (clearSeeing(z, peers[a], peers[b], -1)) return cellsFigure(FIG_CELLS_ONLY, z, p, peers[a], peers[b], -1, 0, 0);
                 }
             }
         }
@@ -484,7 +486,7 @@ final class Sudoku {
                     if (Integer.bitCount(bm) != 2 || (bm & pm) != bm || bm == am) continue;
                     int z = am & bm;
                     if (Integer.bitCount(z) != 1) continue;
-                    if (clearSeeing(z, peers[a], peers[b], p)) return true;
+                    if (clearSeeing(z, peers[a], peers[b], p)) return cellsFigure(FIG_CELLS_ONLY, z, p, peers[a], peers[b], -1, 0, 0);
                 }
             }
         }
@@ -504,7 +506,7 @@ final class Sudoku {
                         if (Integer.bitCount(m2) != 2 || Integer.bitCount(m1 & m2) != 1) continue;
                         int top1 = UNITS[t * 9 + l1][Integer.numberOfTrailingZeros(m1 & ~m2)];
                         int top2 = UNITS[t * 9 + l2][Integer.numberOfTrailingZeros(m2 & ~m1)];
-                        if (clearSeeing(b, top1, top2, -1)) return true;
+                        if (clearSeeing(b, top1, top2, -1)) return cellsFigure(FIG_CELLS_ONLY, b, top1, top2, UNITS[t * 9 + l1][Integer.numberOfTrailingZeros(m1 & m2)], UNITS[t * 9 + l2][Integer.numberOfTrailingZeros(m1 & m2)], t * 9 + l1, t * 9 + l2);
                     }
                 }
             }
@@ -533,7 +535,7 @@ final class Sudoku {
                             int boxMate = j == 0 ? c0 : c1;
                             int colEnd = j == 0 ? c1 : c0;
                             if (BOX[inBox] != BOX[boxMate]) continue;
-                            if (clearSeeing(b, rowEnd, colEnd, -1)) return true;
+                            if (clearSeeing(b, rowEnd, colEnd, -1)) return cellsFigure(FIG_CELLS_ONLY, b, rowEnd, inBox, boxMate, colEnd, r, 9 + c);
                         }
                     }
                 }
@@ -556,7 +558,7 @@ final class Sudoku {
                         int e1 = UNITS[u][Integer.numberOfTrailingZeros(um)];
                         int e2 = UNITS[u][Integer.numberOfTrailingZeros(um & (um - 1))];
                         if (!(sees(e1, p) && sees(e2, q)) && !(sees(e1, q) && sees(e2, p))) continue;
-                        if (clearSeeing(m & ~b, p, q, -1)) return true;
+                        if (clearSeeing(m & ~b, p, q, -1)) return sees(e1, p) ? cellsFigure(FIG_CELLS_ONLY, m, p, q, e1, e2, b, u) : cellsFigure(FIG_CELLS_ONLY, m, p, q, e2, e1, b, u);
                     }
                 }
             }
@@ -577,7 +579,7 @@ final class Sudoku {
             if (Integer.bitCount(m) != 2 || lc[corners[(k + 2) & 3]] != m || lc[corners[(k + 3) & 3]] != m) continue;
             if ((lc[target] & m) != m || lc[target] == m) continue;
             lc[target] &= ~m;
-            return true;
+            return rectangleFigure(m, target, 0);
         }
         return false;
     }
@@ -585,6 +587,194 @@ final class Sudoku {
     private boolean rated(int r) {
         if (r > stepRating) stepRating = r;
         return true;
+    }
+
+    static final int FIG_MAX = 64;
+    static final int FIG_CELLS = 2048;
+    static final int FIG_ELIMS = 1024;
+    static final int FIG_POINTING = 1;
+    static final int FIG_CLAIMING = 2;
+    static final int FIG_NAKED = 3;
+    static final int FIG_HIDDEN = 4;
+    static final int FIG_FISH = 5;
+    static final int FIG_CELLS_ONLY = 6;
+    static final int FIG_RECTANGLE = 7;
+    static final int FIG_SUBSET = 8;
+    static final int FIG_CROSS = 9;
+    static final int FIG_PATH = 10;
+    static final int FIG_QUAD = 11;
+    static final int FIG_CHAIN = 12;
+    static final int FIG_ALS = 13;
+    static final int FIG_LINKS = 14;
+    static final int FIG_STEM = 15;
+    static final int FIG_LINE = 16;
+    static final int FIG_BOX = 17;
+    boolean tracing;
+    private final int[] traceLc = new int[81];
+    int figCount;
+    final int[] figKind = new int[FIG_MAX];
+    final int[] figDigits = new int[FIG_MAX];
+    final int[] figA = new int[FIG_MAX];
+    final int[] figB = new int[FIG_MAX];
+    final int[] figCellEnd = new int[FIG_MAX];
+    final int[] figElimEnd = new int[FIG_MAX];
+    private int figCellCount;
+    final int[] figCells = new int[FIG_CELLS];
+    private int figElimCount;
+    final int[] figElimCell = new int[FIG_ELIMS];
+    final int[] figElimMask = new int[FIG_ELIMS];
+    private int chainLength;
+    private final int[] chainPath = new int[STATES];
+    private final int[] alsParent = new int[MAX_ALS * 9];
+    private int alsPathLength;
+    private final int[] alsPath = new int[MAX_ALS * 9];
+    int conflictState = -1;
+    int conflictCell = -1;
+    int conflictUnit = -1;
+    int conflictDigits;
+    boolean logging;
+    int logLevel;
+    int logCount;
+    final int[] logCell = new int[4096];
+    final int[] logDigit = new int[4096];
+    final int[] logWhy = new int[4096];
+
+    private void traceStart() {
+        figCount = 0;
+        figCellCount = 0;
+        figElimCount = 0;
+        System.arraycopy(lc, 0, traceLc, 0, 81);
+    }
+
+    private void figCell(int c) {
+        if (tracing && figCellCount < FIG_CELLS) figCells[figCellCount++] = c;
+    }
+
+    private boolean figure(int kind, int digits, int a, int b) {
+        if (!tracing) return true;
+        if (figCount == FIG_MAX) {
+            figCellCount = figCellEnd[FIG_MAX - 1];
+            return true;
+        }
+        int f = figCount++;
+        figKind[f] = kind;
+        figDigits[f] = digits;
+        figA[f] = a;
+        figB[f] = b;
+        figCellEnd[f] = figCellCount;
+        for (int c = 0; c < 81; c++) {
+            int gone = traceLc[c] & ~lc[c];
+            if (gone != 0 && figElimCount < FIG_ELIMS) {
+                figElimCell[figElimCount] = c;
+                figElimMask[figElimCount] = gone;
+                figElimCount++;
+            }
+            traceLc[c] = lc[c];
+        }
+        figElimEnd[f] = figElimCount;
+        return true;
+    }
+
+    private boolean unitFigure(int kind, int digits, int a, int b) {
+        for (int k = 0; k < 9; k++) if ((traceLc[UNITS[a][k]] & digits) != 0) figCell(UNITS[a][k]);
+        return figure(kind, digits, a, b);
+    }
+
+    private boolean membersFigure(int kind, int digits, int u, int members) {
+        for (int k = 0; k < 9; k++) if ((members & (1 << k)) != 0) figCell(UNITS[u][k]);
+        return figure(kind, digits, u, members);
+    }
+
+    private boolean fishFigure(int b, int t, int base, int cover) {
+        for (int l = 0; l < 9; l++) {
+            if ((base & (1 << l)) == 0) continue;
+            for (int k = 0; k < 9; k++) if ((traceLc[UNITS[t * 9 + l][k]] & b) != 0) figCell(UNITS[t * 9 + l][k]);
+        }
+        return figure(FIG_FISH, b, t, base | (cover << 9));
+    }
+
+    private boolean cellsFigure(int kind, int digits, int c1, int c2, int c3, int c4, int a, int b) {
+        if (c1 >= 0) figCell(c1);
+        if (c2 >= 0) figCell(c2);
+        if (c3 >= 0) figCell(c3);
+        if (c4 >= 0) figCell(c4);
+        return figure(kind, digits, a, b);
+    }
+
+    private boolean rectangleFigure(int m, int a, int b) {
+        for (int i = 0; i < 4; i++) figCell(corners[i]);
+        return figure(FIG_RECTANGLE, m, a, b);
+    }
+
+    private boolean pathFigure(int p, int q, int m) {
+        if (!tracing) return true;
+        int[] dist = dist81;
+        int[] path = cellList;
+        int n = 0;
+        for (int x = q; ; ) {
+            path[n++] = x;
+            if (x == p) break;
+            int[] peers = PEERS[x];
+            int k = 0;
+            while (k < 20 && (traceLc[peers[k]] != m || dist[peers[k]] != dist[x] - 1)) k++;
+            if (k == 20) break;
+            x = peers[k];
+        }
+        for (int i = n - 1; i >= 0; i--) figCell(path[i]);
+        return figure(FIG_PATH, m, 0, 0);
+    }
+
+    private void keepChain(int end) {
+        if (!tracing) return;
+        int n = 0;
+        for (int st = end; st >= 0; st = parent[st]) chainPath[n++] = st;
+        chainLength = n;
+    }
+
+    private boolean chainFigure(int loop) {
+        for (int i = chainLength - 1; i >= 0; i--) figCell(chainPath[i]);
+        return figure(FIG_CHAIN, 0, loop, 0);
+    }
+
+    private boolean alsFigure(int i, int role, int extra) {
+        for (int w = 0; w < 3; w++) for (int m = alsCells[i * 3 + w]; m != 0; m &= m - 1) figCell(w * 27 + Integer.numberOfTrailingZeros(m));
+        return figure(FIG_ALS, alsDigits[i], role, extra);
+    }
+
+    private void keepAlsPath(int end) {
+        if (!tracing) return;
+        int n = 0;
+        int st = end;
+        for (; st >= 0; st = alsParent[st]) alsPath[n++] = st;
+        alsPath[n++] = st;
+        alsPathLength = n;
+    }
+
+    private boolean alsChainFigure() {
+        if (!tracing) return true;
+        int[] path = alsPath;
+        int n = alsPathLength;
+        alsFigure(-1 - path[n - 1], 0, 0);
+        for (int i = n - 2; i >= 0; i--) alsFigure(path[i] / 9, n - 1 - i, 1 << (path[i] % 9));
+        return true;
+    }
+
+    private void log(int c, int d, int why) {
+        if (logCount < 4096) {
+            logCell[logCount] = c;
+            logDigit[logCount] = d;
+            logWhy[logCount] = why;
+            logCount++;
+        }
+    }
+
+    private boolean logConflict(int level, int c, int u, int digits) {
+        if (logging && level == logLevel) {
+            conflictCell = c;
+            conflictUnit = c < 0 ? u : -1;
+            conflictDigits = digits;
+        }
+        return false;
     }
 
     private boolean drop(int cell, int mask) {
@@ -623,7 +813,7 @@ final class Sudoku {
                             int md = lc[cells[d]];
                             int m4 = m3 | md;
                             if (md == 0 || Integer.bitCount(m4) != 4) continue;
-                            if (dropOutside(cells, m4, (1 << a) | (1 << b) | (1 << c) | (1 << d))) return true;
+                            if (dropOutside(cells, m4, (1 << a) | (1 << b) | (1 << c) | (1 << d))) return membersFigure(FIG_NAKED, m4, u, (1 << a) | (1 << b) | (1 << c) | (1 << d));
                         }
                     }
                 }
@@ -651,7 +841,7 @@ final class Sudoku {
                             int p4 = positions[d4];
                             int u4 = u3 | p4;
                             if (p4 == 0 || Integer.bitCount(u4) != 4) continue;
-                            if (keepInside(cells, u4, bit(d1) | bit(d2) | bit(d3) | bit(d4))) return true;
+                            if (keepInside(cells, u4, bit(d1) | bit(d2) | bit(d3) | bit(d4))) return membersFigure(FIG_HIDDEN, bit(d1) | bit(d2) | bit(d3) | bit(d4), u, u4);
                         }
                     }
                 }
@@ -687,7 +877,7 @@ final class Sudoku {
                 for (int base = 0; base < 512; base++) {
                     if (Integer.bitCount(base) != 4) continue;
                     int cover = baseUnion(base);
-                    if (Integer.bitCount(cover) == 4 && fishDrop(b, t, cover, base)) return true;
+                    if (Integer.bitCount(cover) == 4 && fishDrop(b, t, cover, base)) return fishFigure(b, t, base, cover);
                 }
             }
         }
@@ -710,7 +900,7 @@ final class Sudoku {
                         int inside = all & block;
                         for (int sub = inside; ; sub = (sub - 1) & inside) {
                             int cover = outside | sub;
-                            if (Integer.bitCount(cover) == n && finnedDrop(b, t, base, cover, sashimi)) return true;
+                            if (Integer.bitCount(cover) == n && finnedDrop(b, t, base, cover, sashimi)) return fishFigure(b, t, base, cover);
                             if (sub == 0) break;
                         }
                     }
@@ -770,14 +960,14 @@ final class Sudoku {
                             int m = unitMask(UNITS[9 + line], b);
                             if (Integer.bitCount(m) != 2 || (m & (1 << row)) == 0) continue;
                             int far = Integer.numberOfTrailingZeros(m & ~(1 << row));
-                            if (far / 3 != band && drop(far * 9 + col, b)) return true;
+                            if (far / 3 != band && drop(far * 9 + col, b)) return cellsFigure(FIG_CROSS, b, row * 9 + line, far * 9 + line, far * 9 + col, -1, 18 + box, row * 9 + col);
                         }
                         for (int line = 0; line < 9; line++) {
                             if (line / 3 == band) continue;
                             int m = unitMask(UNITS[line], b);
                             if (Integer.bitCount(m) != 2 || (m & (1 << col)) == 0) continue;
                             int far = Integer.numberOfTrailingZeros(m & ~(1 << col));
-                            if (far / 3 != stack && drop(row * 9 + far, b)) return true;
+                            if (far / 3 != stack && drop(row * 9 + far, b)) return cellsFigure(FIG_CROSS, b, line * 9 + col, line * 9 + far, row * 9 + far, -1, 18 + box, row * 9 + col);
                         }
                     }
                 }
@@ -814,7 +1004,7 @@ final class Sudoku {
                 if (dist81[q] < 3 || (dist81[q] & 1) == 0) continue;
                 boolean changed = false;
                 for (int c = 0; c < 81; c++) if (c != p && c != q && SEE[c * 81 + p] && SEE[c * 81 + q] && drop(c, m)) changed = true;
-                if (changed) return true;
+                if (changed) return pathFigure(p, q, m);
             }
         }
         return false;
@@ -888,7 +1078,7 @@ final class Sudoku {
             for (int i = 0; i < 4; i++) if ((lc[quad[i]] & z) != 0 && !SEE[t * 81 + quad[i]]) all = false;
             if (all && drop(t, z)) changed = true;
         }
-        return changed;
+        return changed && cellsFigure(FIG_QUAD, z, quad[0], quad[1], quad[2], quad[3], union, 0);
     }
 
     private boolean rectangles(int kind) {
@@ -958,7 +1148,7 @@ final class Sudoku {
         }
         if ((floors | roofs) != 15 || extra == 0 || Integer.bitCount(floors) == 3) return false;
         boolean adjacent = Integer.bitCount(floors) == 2 && floors != 5 && floors != 10;
-        return adjacent != diagonal && dropSeeingCorners(extra, roofs);
+        return adjacent != diagonal && dropSeeingCorners(extra, roofs) && rectangleFigure(m, extra, roofs);
     }
 
     private boolean urType3() {
@@ -970,13 +1160,14 @@ final class Sudoku {
             if ((lc[r1] & m) != m || (lc[r2] & m) != m || lc[r1] == m || lc[r2] == m) continue;
             int extra = (lc[r1] | lc[r2]) & ~m;
             int line = ROW[r1] == ROW[r2] ? ROW[r1] : 9 + COL[r1];
-            if (urSubset(UNITS[line], r1, r2, extra)) return true;
-            if (BOX[r1] == BOX[r2] && urSubset(UNITS[18 + BOX[r1]], r1, r2, extra)) return true;
+            if (urSubset(line, r1, r2, extra)) return rectangleFigure(m, extra, (1 << ((k + 2) & 3)) | (1 << ((k + 3) & 3)));
+            if (BOX[r1] == BOX[r2] && urSubset(18 + BOX[r1], r1, r2, extra)) return rectangleFigure(m, extra, (1 << ((k + 2) & 3)) | (1 << ((k + 3) & 3)));
         }
         return false;
     }
 
-    private boolean urSubset(int[] cells, int r1, int r2, int extra) {
+    private boolean urSubset(int u, int r1, int r2, int extra) {
+        int[] cells = UNITS[u];
         int n = 0;
         for (int k = 0; k < 9; k++) {
             int c = cells[k];
@@ -990,7 +1181,10 @@ final class Sudoku {
             if (Integer.bitCount(m) != size + 1) continue;
             boolean changed = false;
             for (int i = 0; i < n; i++) if ((s & (1 << i)) == 0 && drop(others[i], m)) changed = true;
-            if (changed) return true;
+            if (changed) {
+                for (int i = 0; i < n; i++) if ((s & (1 << i)) != 0) figCell(others[i]);
+                return figure(FIG_SUBSET, m, u, 0);
+            }
         }
         return false;
     }
@@ -1010,15 +1204,16 @@ final class Sudoku {
             int r1 = corners[(k + 2) & 3];
             int r2 = corners[(k + 3) & 3];
             if ((lc[r1] & m) != m || (lc[r2] & m) != m || (lc[r1] == m && lc[r2] == m)) continue;
-            int[] line = ROW[r1] == ROW[r2] ? UNITS[ROW[r1]] : UNITS[9 + COL[r1]];
-            int[] box = UNITS[18 + BOX[r1]];
+            int line = ROW[r1] == ROW[r2] ? ROW[r1] : 9 + COL[r1];
+            int box = 18 + BOX[r1];
             for (int rest = m; rest != 0; rest &= rest - 1) {
                 int x = rest & -rest;
                 int y = m & ~x;
-                if (!onlyIn(line, x, r1, r2) && !(BOX[r1] == BOX[r2] && onlyIn(box, x, r1, r2))) continue;
+                int where = onlyIn(UNITS[line], x, r1, r2) ? line : BOX[r1] == BOX[r2] && onlyIn(UNITS[box], x, r1, r2) ? box : -1;
+                if (where < 0) continue;
                 boolean a = drop(r1, y);
                 boolean b = drop(r2, y);
-                if (a || b) return true;
+                if (a || b) return rectangleFigure(m, x, where);
             }
         }
         return false;
@@ -1038,7 +1233,7 @@ final class Sudoku {
                 if (!rows && !cols) continue;
                 boolean a = drop(g1, x);
                 boolean b = drop(g2, x);
-                if (a || b) return true;
+                if (a || b) return rectangleFigure(m, x, rows ? 0 : 1);
             }
         }
         return false;
@@ -1056,7 +1251,7 @@ final class Sudoku {
                 int y = m & ~x;
                 if (!onlyIn(UNITS[ROW[d]], x, d, ROW[d] * 9 + COL[a])) continue;
                 if (!onlyIn(UNITS[9 + COL[d]], x, d, ROW[a] * 9 + COL[d])) continue;
-                if (drop(d, y)) return true;
+                if (drop(d, y)) return rectangleFigure(m, x, k);
             }
         }
         return false;
@@ -1085,7 +1280,7 @@ final class Sudoku {
             }
             if (ok) {
                 lc[tri] = x;
-                return true;
+                return cellsFigure(FIG_CELLS_ONLY, x, tri, -1, -1, -1, 0, 0);
             }
         }
         return false;
@@ -1410,6 +1605,7 @@ final class Sudoku {
                 if ((ch & 1) == 0) continue;
                 if (loop ? loopTargets(s, ch) : targets(s, ch >> 1, false) && targets(s, ch >> 1, true)) {
                     System.arraycopy(elimTry, 0, elimBest, 0, 81);
+                    keepChain(ch);
                     return d;
                 }
             }
@@ -1434,7 +1630,7 @@ final class Sudoku {
         if (best == none) return false;
         for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
         stepRating = TECH_BASE[id] + chainBonus(best);
-        return true;
+        return chainFigure(loop);
     }
 
     boolean sueDeCoq() {
@@ -1498,7 +1694,13 @@ final class Sudoku {
             int c = UNITS[18 + box][k];
             if (keep[c] != 1 && keep[c] != 3 && drop(c, boxDigits)) changed = true;
         }
-        return changed;
+        if (!changed) return false;
+        for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) figCell(inter[j]);
+        for (int j = 0; j < nl; j++) if ((a & (1 << j)) != 0) figCell(lineRest[j]);
+        figure(FIG_LINE, lineDigits, line, Integer.bitCount(cs));
+        for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) figCell(inter[j]);
+        for (int j = 0; j < nb; j++) if ((d & (1 << j)) != 0) figCell(boxRest[j]);
+        return figure(FIG_BOX, boxDigits, 18 + box, Integer.bitCount(cs));
     }
 
     private void collectAls() {
@@ -1625,7 +1827,7 @@ final class Sudoku {
                     for (int rest = alsDigits[i] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(i, i, Integer.numberOfTrailingZeros(rest))) changed = true;
                     for (int rest = alsDigits[j] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(j, j, Integer.numberOfTrailingZeros(rest))) changed = true;
                 }
-                if (changed) return true;
+                if (changed) return alsFigure(i, 0, 0) && alsFigure(j, 1, 0) && figure(FIG_LINKS, rcc, 0, 0);
             }
         }
         return false;
@@ -1648,7 +1850,7 @@ final class Sudoku {
                             int y = ys & -ys;
                             boolean changed = false;
                             for (int zs = common & ~x & ~y; zs != 0; zs &= zs - 1) if (dropSeen(a, b, Integer.numberOfTrailingZeros(zs))) changed = true;
-                            if (changed) return true;
+                            if (changed) return alsFigure(c, 0, 0) && alsFigure(a, 1, 0) && alsFigure(b, 2, 0) && figure(FIG_LINKS, x, y, 0);
                         }
                     }
                 }
@@ -1677,7 +1879,7 @@ final class Sudoku {
             petalStart[k] = n;
             for (int z = 0; z < 9; z++) {
                 if ((sm & (1 << z)) != 0) continue;
-                if (blossom(0, k, z, digitCells[z * 3], digitCells[z * 3 + 1], digitCells[z * 3 + 2], 0, 0, 0)) return true;
+                if (blossom(0, k, z, digitCells[z * 3], digitCells[z * 3 + 1], digitCells[z * 3 + 2], 0, 0, 0)) return cellsFigure(FIG_STEM, 1 << z, stem, -1, -1, -1, 0, 0);
             }
         }
         return false;
@@ -1703,7 +1905,7 @@ final class Sudoku {
             int t1 = s1 & alsSeen[at + 1];
             int t2 = s2 & alsSeen[at + 2];
             if ((t0 | t1 | t2) == 0) continue;
-            if (blossom(k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return true;
+            if (blossom(k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return alsFigure(i, k, 0);
         }
         return false;
     }
@@ -1721,7 +1923,7 @@ final class Sudoku {
         if (best == none) return false;
         for (int c = 0; c < 81; c++) lc[c] &= ~elimBest[c];
         stepRating = TECH_BASE[36] + chainBonus(2 * best - 1);
-        return true;
+        return alsChainFigure();
     }
 
     private int alsChainFrom(int a, int limit) {
@@ -1742,6 +1944,7 @@ final class Sudoku {
                     alsMark[st] = stamp;
                     alsFirst[st] = 0;
                     alsDepth[st] = 2;
+                    alsParent[st] = -1 - a;
                     alsQueue[tail++] = st;
                 }
                 alsFirst[st] |= 1 << x;
@@ -1755,6 +1958,7 @@ final class Sudoku {
             if (k >= limit) break;
             if (b != a && alsChainTargets(a, b, x, alsFirst[st])) {
                 System.arraycopy(elimTry, 0, elimBest, 0, 81);
+                keepAlsPath(st);
                 return k;
             }
             if (k + 1 >= limit) continue;
@@ -1768,6 +1972,7 @@ final class Sudoku {
                         alsMark[next] = stamp;
                         alsFirst[next] = 0;
                         alsDepth[next] = k + 1;
+                        alsParent[next] = st;
                         alsQueue[tail++] = next;
                     }
                     if (alsDepth[next] == k + 1) alsFirst[next] |= alsFirst[st];
@@ -1809,6 +2014,10 @@ final class Sudoku {
         int stamp = markValue;
         int origin = node * 2 + 1;
         mark[origin] = stamp;
+        parent[origin] = -1;
+        conflictState = -1;
+        conflictCell = -1;
+        conflictUnit = -1;
         int head = 0;
         int tail = 0;
         queue[tail++] = origin;
@@ -1817,8 +2026,13 @@ final class Sudoku {
             for (int k = linkStart[st]; k < linkStart[st + 1]; k++) {
                 int ch = linkTo[k];
                 if (mark[ch] == stamp) continue;
-                if (mark[ch ^ 1] == stamp) return false;
+                if (mark[ch ^ 1] == stamp) {
+                    parent[ch] = st;
+                    conflictState = ch;
+                    return false;
+                }
                 mark[ch] = stamp;
+                parent[ch] = st;
                 queue[tail++] = ch;
             }
         }
@@ -1832,7 +2046,12 @@ final class Sudoku {
             if ((st & 1) != 0) onMask[c] |= b;
             else offMask[c] |= b;
         }
-        for (int c = 0; c < 81; c++) if (lc[c] != 0 && (lc[c] & ~offMask[c]) == 0) return false;
+        for (int c = 0; c < 81; c++) {
+            if (lc[c] != 0 && (lc[c] & ~offMask[c]) == 0) {
+                conflictCell = c;
+                return false;
+            }
+        }
         for (int u = 0; u < 27; u++) {
             int have = 0;
             int left = 0;
@@ -1841,7 +2060,11 @@ final class Sudoku {
                 have |= lc[c];
                 left |= lc[c] & ~offMask[c];
             }
-            if ((have & ~left) != 0) return false;
+            if ((have & ~left) != 0) {
+                conflictUnit = u;
+                conflictDigits = have & ~left;
+                return false;
+            }
         }
         return true;
     }
@@ -1918,7 +2141,8 @@ final class Sudoku {
         return false;
     }
 
-    private void assign(int at, int c, int d) {
+    private void assign(int at, int c, int d, int why) {
+        if (logging && at == 81 * logLevel) log(c, d, why);
         int keep = ~bit(d);
         sv[at + c] = d;
         sc[at + c] = 0;
@@ -1932,9 +2156,9 @@ final class Sudoku {
             for (int c = 0; c < 81; c++) {
                 if (sv[at + c] != 0) continue;
                 int m = sc[at + c];
-                if (m == 0) return false;
+                if (m == 0) return logConflict(level, c, 0, 0);
                 if (Integer.bitCount(m) == 1) {
-                    assign(at, c, digit(m));
+                    assign(at, c, digit(m), -1);
                     progress = true;
                 }
             }
@@ -1947,7 +2171,7 @@ final class Sudoku {
                     int c = cells[k];
                     if (sv[at + c] != 0) {
                         int b = bit(sv[at + c]);
-                        if ((placed & b) != 0) return false;
+                        if ((placed & b) != 0) return logConflict(level, -2, u, b);
                         placed |= b;
                         continue;
                     }
@@ -1955,13 +2179,13 @@ final class Sudoku {
                     twice |= once & m;
                     once |= m;
                 }
-                if ((once | placed) != ALL) return false;
+                if ((once | placed) != ALL) return logConflict(level, -1, u, ALL & ~(once | placed));
                 for (int single = once & ~twice & ~placed; single != 0; single &= single - 1) {
                     int b = single & -single;
                     for (int k = 0; k < 9; k++) {
                         int c = cells[k];
                         if (sv[at + c] != 0 || (sc[at + c] & b) == 0) continue;
-                        assign(at, c, digit(b));
+                        assign(at, c, digit(b), u);
                         progress = true;
                         break;
                     }
@@ -1981,7 +2205,7 @@ final class Sudoku {
             System.arraycopy(sc, from * 81, sc, at, 81);
         }
         if ((sc[at + cell] & bit(d)) == 0) return false;
-        assign(at, cell, d);
+        assign(at, cell, d, -2);
         return settleNested(level);
     }
 
@@ -1996,6 +2220,7 @@ final class Sudoku {
                 for (int rest = sc[at + q]; rest != 0; rest &= rest - 1) {
                     int b = rest & -rest;
                     if ((sc[at + q] & b) == 0 || branch(level - 1, level, q, Integer.numberOfTrailingZeros(b) + 1)) continue;
+                    if (logging && at == 81 * logLevel) log(q, Integer.numberOfTrailingZeros(b) + 1, -3);
                     sc[at + q] &= ~b;
                     changed = true;
                     if (!settle(level)) return false;
@@ -2128,6 +2353,7 @@ final class Sudoku {
     }
 
     int step() {
+        if (tracing) traceStart();
         for (int k = 0; k < techLimit; k++) {
             int id = TECH_ORDER[k];
             if (techOff[id]) continue;

@@ -66,6 +66,9 @@ void sudoku_init(Sudoku *s, uint64_t seed) {
     initTables();
     memset(s, 0, sizeof(*s));
     s->techLimit = SUDOKU_TECH_COUNT;
+    s->conflictState = -1;
+    s->conflictCell = -1;
+    s->conflictUnit = -1;
     s->rng = (uint32_t)seed;
 }
 
@@ -264,6 +267,143 @@ static int rated(Sudoku *s, int r) {
     return 1;
 }
 
+static void traceStart(Sudoku *s) {
+    s->figCount = 0;
+    s->figCellCount = 0;
+    s->figElimCount = 0;
+    memcpy(s->traceLc, s->lc, sizeof(s->traceLc));
+}
+
+static void figCell(Sudoku *s, int c) {
+    if (s->tracing && s->figCellCount < SUDOKU_FIG_CELLS) s->figCells[s->figCellCount++] = c;
+}
+
+static int figure(Sudoku *s, int kind, int digits, int a, int b) {
+    if (!s->tracing) return 1;
+    if (s->figCount == SUDOKU_FIG_MAX) {
+        s->figCellCount = s->figCellEnd[SUDOKU_FIG_MAX - 1];
+        return 1;
+    }
+    int f = s->figCount++;
+    s->figKind[f] = kind;
+    s->figDigits[f] = digits;
+    s->figA[f] = a;
+    s->figB[f] = b;
+    s->figCellEnd[f] = s->figCellCount;
+    for (int c = 0; c < 81; c++) {
+        int gone = s->traceLc[c] & ~s->lc[c];
+        if (gone != 0 && s->figElimCount < SUDOKU_FIG_ELIMS) {
+            s->figElimCell[s->figElimCount] = c;
+            s->figElimMask[s->figElimCount] = gone;
+            s->figElimCount++;
+        }
+        s->traceLc[c] = s->lc[c];
+    }
+    s->figElimEnd[f] = s->figElimCount;
+    return 1;
+}
+
+static int unitFigure(Sudoku *s, int kind, int digits, int a, int b) {
+    for (int k = 0; k < 9; k++) if ((s->traceLc[SUDOKU_UNITS[a][k]] & digits) != 0) figCell(s, SUDOKU_UNITS[a][k]);
+    return figure(s, kind, digits, a, b);
+}
+
+static int membersFigure(Sudoku *s, int kind, int digits, int u, int members) {
+    for (int k = 0; k < 9; k++) if ((members & (1 << k)) != 0) figCell(s, SUDOKU_UNITS[u][k]);
+    return figure(s, kind, digits, u, members);
+}
+
+static int fishFigure(Sudoku *s, int b, int t, int base, int cover) {
+    for (int l = 0; l < 9; l++) {
+        if ((base & (1 << l)) == 0) continue;
+        for (int k = 0; k < 9; k++) if ((s->traceLc[SUDOKU_UNITS[t * 9 + l][k]] & b) != 0) figCell(s, SUDOKU_UNITS[t * 9 + l][k]);
+    }
+    return figure(s, SUDOKU_FIG_FISH, b, t, base | (cover << 9));
+}
+
+static int cellsFigure(Sudoku *s, int kind, int digits, int c1, int c2, int c3, int c4, int a, int b) {
+    if (c1 >= 0) figCell(s, c1);
+    if (c2 >= 0) figCell(s, c2);
+    if (c3 >= 0) figCell(s, c3);
+    if (c4 >= 0) figCell(s, c4);
+    return figure(s, kind, digits, a, b);
+}
+
+static int rectangleFigure(Sudoku *s, int m, int a, int b) {
+    for (int i = 0; i < 4; i++) figCell(s, s->corners[i]);
+    return figure(s, SUDOKU_FIG_RECTANGLE, m, a, b);
+}
+
+static int pathFigure(Sudoku *s, int p, int q, int m) {
+    if (!s->tracing) return 1;
+    int *path = s->cellList;
+    int n = 0;
+    for (int x = q; ; ) {
+        path[n++] = x;
+        if (x == p) break;
+        const int *peers = SUDOKU_PEERS[x];
+        int k = 0;
+        while (k < 20 && (s->traceLc[peers[k]] != m || s->dist81[peers[k]] != s->dist81[x] - 1)) k++;
+        if (k == 20) break;
+        x = peers[k];
+    }
+    for (int i = n - 1; i >= 0; i--) figCell(s, path[i]);
+    return figure(s, SUDOKU_FIG_PATH, m, 0, 0);
+}
+
+static void keepChain(Sudoku *s, int end) {
+    if (!s->tracing) return;
+    int n = 0;
+    for (int st = end; st >= 0; st = s->parent[st]) s->chainPath[n++] = st;
+    s->chainLength = n;
+}
+
+static int chainFigure(Sudoku *s, int loop) {
+    for (int i = s->chainLength - 1; i >= 0; i--) figCell(s, s->chainPath[i]);
+    return figure(s, SUDOKU_FIG_CHAIN, 0, loop, 0);
+}
+
+static int alsFigure(Sudoku *s, int i, int role, int extra) {
+    for (int w = 0; w < 3; w++) for (int m = s->alsCells[i * 3 + w]; m != 0; m &= m - 1) figCell(s, w * 27 + __builtin_ctz(m));
+    return figure(s, SUDOKU_FIG_ALS, s->alsDigits[i], role, extra);
+}
+
+static void keepAlsPath(Sudoku *s, int end) {
+    if (!s->tracing) return;
+    int n = 0;
+    int st = end;
+    for (; st >= 0; st = s->alsParent[st]) s->alsPath[n++] = st;
+    s->alsPath[n++] = st;
+    s->alsPathLength = n;
+}
+
+static int alsChainFigure(Sudoku *s) {
+    if (!s->tracing) return 1;
+    const int *path = s->alsPath;
+    int n = s->alsPathLength;
+    alsFigure(s, -1 - path[n - 1], 0, 0);
+    for (int i = n - 2; i >= 0; i--) alsFigure(s, path[i] / 9, n - 1 - i, 1 << (path[i] % 9));
+    return 1;
+}
+
+static void log(Sudoku *s, int c, int d, int why) {
+    if (s->logCount < 4096) {
+        s->logCell[s->logCount] = c;
+        s->logDigit[s->logCount] = d;
+        s->logWhy[s->logCount] = why;
+        s->logCount++;
+    }
+}
+
+static int logConflict(Sudoku *s, int level, int c, int u, int digits) {
+    if (s->logging && level == s->logLevel) {
+        s->conflictCell = c;
+        s->conflictUnit = c < 0 ? u : -1;
+        s->conflictDigits = digits;
+    }
+    return 0;
+}
+
 static int drop(Sudoku *s, int cell, int mask) {
     if ((s->lc[cell] & mask) == 0) return 0;
     s->lc[cell] &= ~mask;
@@ -296,11 +436,11 @@ static int lockedCandidates(Sudoku *s) {
                     cols |= 1 << SUDOKU_COL[c];
                 }
             }
-            if (rows != 0 && __builtin_popcount(rows) == 1) {
-                changed |= clearLineOutsideBox(s, SUDOKU_UNITS[__builtin_ctz(rows)], box, b);
+            if (rows != 0 && __builtin_popcount(rows) == 1 && clearLineOutsideBox(s, SUDOKU_UNITS[__builtin_ctz(rows)], box, b)) {
+                changed = unitFigure(s, SUDOKU_FIG_POINTING, b, 18 + box, __builtin_ctz(rows));
             }
-            if (cols != 0 && __builtin_popcount(cols) == 1) {
-                changed |= clearLineOutsideBox(s, SUDOKU_UNITS[9 + __builtin_ctz(cols)], box, b);
+            if (cols != 0 && __builtin_popcount(cols) == 1 && clearLineOutsideBox(s, SUDOKU_UNITS[9 + __builtin_ctz(cols)], box, b)) {
+                changed = unitFigure(s, SUDOKU_FIG_POINTING, b, 18 + box, 9 + __builtin_ctz(cols));
             }
         }
         for (int line = 0; line < 18; line++) {
@@ -311,14 +451,16 @@ static int lockedCandidates(Sudoku *s) {
             }
             if (boxes != 0 && __builtin_popcount(boxes) == 1) {
                 int box = __builtin_ctz(boxes);
+                int claimed = 0;
                 for (int k = 0; k < 9; k++) {
                     int c = SUDOKU_UNITS[18 + box][k];
                     int inLine = line < 9 ? SUDOKU_ROW[c] == line : SUDOKU_COL[c] == line - 9;
                     if (!inLine && (s->lc[c] & b) != 0) {
                         s->lc[c] &= ~b;
-                        changed = rated(s, 28);
+                        claimed = 1;
                     }
                 }
+                if (claimed) changed = rated(s, 28) && unitFigure(s, SUDOKU_FIG_CLAIMING, b, line, 18 + box);
             }
         }
     }
@@ -349,12 +491,12 @@ static int subsets(Sudoku *s) {
                 if (mb == 0 || __builtin_popcount(mb) > 3) continue;
                 int m2 = ma | mb;
                 if (__builtin_popcount(m2) == 2) {
-                    changed |= dropOutside(s, cells, m2, (1 << a) | (1 << b));
+                    if (dropOutside(s, cells, m2, (1 << a) | (1 << b))) changed = membersFigure(s, SUDOKU_FIG_NAKED, m2, u, (1 << a) | (1 << b));
                 } else if (__builtin_popcount(m2) == 3) {
                     for (int c = b + 1; c < 9; c++) {
                         int mc = s->lc[cells[c]];
                         if (mc != 0 && (mc | m2) == m2) {
-                            if (dropOutside(s, cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(s, 36);
+                            if (dropOutside(s, cells, m2, (1 << a) | (1 << b) | (1 << c))) changed = rated(s, 36) && membersFigure(s, SUDOKU_FIG_NAKED, m2, u, (1 << a) | (1 << b) | (1 << c));
                         }
                     }
                 }
@@ -374,12 +516,12 @@ static int subsets(Sudoku *s) {
                 if (p2 == 0 || __builtin_popcount(p2) > 3) continue;
                 int u2 = p1 | p2;
                 if (__builtin_popcount(u2) == 2) {
-                    if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2))) changed = rated(s, 34);
+                    if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2))) changed = rated(s, 34) && membersFigure(s, SUDOKU_FIG_HIDDEN, sudoku_bit(d1) | sudoku_bit(d2), u, u2);
                 } else if (__builtin_popcount(u2) == 3) {
                     for (int d3 = d2 + 1; d3 <= 9; d3++) {
                         int p3 = s->positions[d3];
                         if (p3 != 0 && (p3 | u2) == u2) {
-                            if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3))) changed = rated(s, 40);
+                            if (keepInside(s, cells, u2, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3))) changed = rated(s, 40) && membersFigure(s, SUDOKU_FIG_HIDDEN, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3), u, u2);
                         }
                     }
                 }
@@ -421,13 +563,13 @@ static int fish(Sudoku *s, int size) {
                     if (m2 == 0 || __builtin_popcount(m2) > size) continue;
                     int u2 = m1 | m2;
                     if (size == 2) {
-                        if (__builtin_popcount(u2) == 2 && fishDrop(s, b, t, u2, (1 << l1) | (1 << l2))) return 1;
+                        if (__builtin_popcount(u2) == 2 && fishDrop(s, b, t, u2, (1 << l1) | (1 << l2))) return fishFigure(s, b, t, (1 << l1) | (1 << l2), u2);
                     } else if (__builtin_popcount(u2) <= 3) {
                         for (int l3 = l2 + 1; l3 < 9; l3++) {
                             int m3 = s->lineMasks[l3];
                             if (m3 == 0 || __builtin_popcount(m3) > 3) continue;
                             int u3 = u2 | m3;
-                            if (__builtin_popcount(u3) == 3 && fishDrop(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return 1;
+                            if (__builtin_popcount(u3) == 3 && fishDrop(s, b, t, u3, (1 << l1) | (1 << l2) | (1 << l3))) return fishFigure(s, b, t, (1 << l1) | (1 << l2) | (1 << l3), u3);
                         }
                     }
                 }
@@ -462,7 +604,7 @@ static int yWing(Sudoku *s) {
                 if ((am & pm) == (bm & pm)) continue;
                 int z = am & bm & ~pm;
                 if (__builtin_popcount(z) != 1) continue;
-                if (clearSeeing(s, z, peers[a], peers[b], -1)) return 1;
+                if (clearSeeing(s, z, peers[a], peers[b], -1)) return cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, z, p, peers[a], peers[b], -1, 0, 0);
             }
         }
     }
@@ -482,7 +624,7 @@ static int xyzWing(Sudoku *s) {
                 if (__builtin_popcount(bm) != 2 || (bm & pm) != bm || bm == am) continue;
                 int z = am & bm;
                 if (__builtin_popcount(z) != 1) continue;
-                if (clearSeeing(s, z, peers[a], peers[b], p)) return 1;
+                if (clearSeeing(s, z, peers[a], peers[b], p)) return cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, z, p, peers[a], peers[b], -1, 0, 0);
             }
         }
     }
@@ -502,7 +644,7 @@ static int skyscraper(Sudoku *s) {
                     if (__builtin_popcount(m2) != 2 || __builtin_popcount(m1 & m2) != 1) continue;
                     int top1 = SUDOKU_UNITS[t * 9 + l1][__builtin_ctz(m1 & ~m2)];
                     int top2 = SUDOKU_UNITS[t * 9 + l2][__builtin_ctz(m2 & ~m1)];
-                    if (clearSeeing(s, b, top1, top2, -1)) return 1;
+                    if (clearSeeing(s, b, top1, top2, -1)) return cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, b, top1, top2, SUDOKU_UNITS[t * 9 + l1][__builtin_ctz(m1 & m2)], SUDOKU_UNITS[t * 9 + l2][__builtin_ctz(m1 & m2)], t * 9 + l1, t * 9 + l2);
                 }
             }
         }
@@ -531,7 +673,7 @@ static int twoStringKite(Sudoku *s) {
                         int boxMate = j == 0 ? c0 : c1;
                         int colEnd = j == 0 ? c1 : c0;
                         if (SUDOKU_BOX[inBox] != SUDOKU_BOX[boxMate]) continue;
-                        if (clearSeeing(s, b, rowEnd, colEnd, -1)) return 1;
+                        if (clearSeeing(s, b, rowEnd, colEnd, -1)) return cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, b, rowEnd, inBox, boxMate, colEnd, r, 9 + c);
                     }
                 }
             }
@@ -554,7 +696,7 @@ static int wWing(Sudoku *s) {
                     int e1 = SUDOKU_UNITS[u][__builtin_ctz(um)];
                     int e2 = SUDOKU_UNITS[u][__builtin_ctz(um & (um - 1))];
                     if (!(sudoku_sees(e1, p) && sudoku_sees(e2, q)) && !(sudoku_sees(e1, q) && sudoku_sees(e2, p))) continue;
-                    if (clearSeeing(s, m & ~b, p, q, -1)) return 1;
+                    if (clearSeeing(s, m & ~b, p, q, -1)) return sudoku_sees(e1, p) ? cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, m, p, q, e1, e2, b, u) : cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, m, p, q, e2, e1, b, u);
                 }
             }
         }
@@ -583,7 +725,7 @@ static int nakedQuad(Sudoku *s) {
                         int md = s->lc[cells[d]];
                         int m4 = m3 | md;
                         if (md == 0 || __builtin_popcount(m4) != 4) continue;
-                        if (dropOutside(s, cells, m4, (1 << a) | (1 << b) | (1 << c) | (1 << d))) return 1;
+                        if (dropOutside(s, cells, m4, (1 << a) | (1 << b) | (1 << c) | (1 << d))) return membersFigure(s, SUDOKU_FIG_NAKED, m4, u, (1 << a) | (1 << b) | (1 << c) | (1 << d));
                     }
                 }
             }
@@ -611,7 +753,7 @@ static int hiddenQuad(Sudoku *s) {
                         int p4 = s->positions[d4];
                         int u4 = u3 | p4;
                         if (p4 == 0 || __builtin_popcount(u4) != 4) continue;
-                        if (keepInside(s, cells, u4, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3) | sudoku_bit(d4))) return 1;
+                        if (keepInside(s, cells, u4, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3) | sudoku_bit(d4))) return membersFigure(s, SUDOKU_FIG_HIDDEN, sudoku_bit(d1) | sudoku_bit(d2) | sudoku_bit(d3) | sudoku_bit(d4), u, u4);
                     }
                 }
             }
@@ -639,7 +781,7 @@ static int jellyfish(Sudoku *s) {
             for (int base = 0; base < 512; base++) {
                 if (__builtin_popcount(base) != 4) continue;
                 int cover = baseUnion(s, base);
-                if (__builtin_popcount(cover) == 4 && fishDrop(s, b, t, cover, base)) return 1;
+                if (__builtin_popcount(cover) == 4 && fishDrop(s, b, t, cover, base)) return fishFigure(s, b, t, base, cover);
             }
         }
     }
@@ -687,7 +829,7 @@ static int finnedFish(Sudoku *s, int n, int sashimi) {
                     int inside = all & block;
                     for (int sub = inside; ; sub = (sub - 1) & inside) {
                         int cover = outside | sub;
-                        if (__builtin_popcount(cover) == n && finnedDrop(s, b, t, base, cover, sashimi)) return 1;
+                        if (__builtin_popcount(cover) == n && finnedDrop(s, b, t, base, cover, sashimi)) return fishFigure(s, b, t, base, cover);
                         if (sub == 0) break;
                     }
                 }
@@ -722,14 +864,14 @@ static int emptyRectangle(Sudoku *s) {
                         int m = unitMask(s, SUDOKU_UNITS[9 + line], b);
                         if (__builtin_popcount(m) != 2 || (m & (1 << row)) == 0) continue;
                         int far = __builtin_ctz(m & ~(1 << row));
-                        if (far / 3 != band && drop(s, far * 9 + col, b)) return 1;
+                        if (far / 3 != band && drop(s, far * 9 + col, b)) return cellsFigure(s, SUDOKU_FIG_CROSS, b, row * 9 + line, far * 9 + line, far * 9 + col, -1, 18 + box, row * 9 + col);
                     }
                     for (int line = 0; line < 9; line++) {
                         if (line / 3 == band) continue;
                         int m = unitMask(s, SUDOKU_UNITS[line], b);
                         if (__builtin_popcount(m) != 2 || (m & (1 << col)) == 0) continue;
                         int far = __builtin_ctz(m & ~(1 << col));
-                        if (far / 3 != stack && drop(s, row * 9 + far, b)) return 1;
+                        if (far / 3 != stack && drop(s, row * 9 + far, b)) return cellsFigure(s, SUDOKU_FIG_CROSS, b, line * 9 + col, line * 9 + far, row * 9 + far, -1, 18 + box, row * 9 + col);
                     }
                 }
             }
@@ -761,7 +903,7 @@ static int remotePair(Sudoku *s) {
             if (s->dist81[q] < 3 || (s->dist81[q] & 1) == 0) continue;
             int changed = 0;
             for (int c = 0; c < 81; c++) if (c != p && c != q && SEE[c * 81 + p] && SEE[c * 81 + q] && drop(s, c, m)) changed = 1;
-            if (changed) return 1;
+            if (changed) return pathFigure(s, p, q, m);
         }
     }
     return 0;
@@ -810,7 +952,7 @@ static int wingDrop(Sudoku *s, int unionMask) {
         for (int i = 0; i < 4; i++) if ((s->lc[quad[i]] & z) != 0 && !SEE[t * 81 + quad[i]]) all = 0;
         if (all && drop(s, t, z)) changed = 1;
     }
-    return changed;
+    return changed && cellsFigure(s, SUDOKU_FIG_QUAD, z, quad[0], quad[1], quad[2], quad[3], unionMask, 0);
 }
 
 static int wxyzWing(Sudoku *s) {
@@ -878,10 +1020,11 @@ static int urExtra(Sudoku *s, int diagonal) {
     }
     if ((floors | roofs) != 15 || extra == 0 || __builtin_popcount(floors) == 3) return 0;
     int adjacent = __builtin_popcount(floors) == 2 && floors != 5 && floors != 10;
-    return adjacent != diagonal && dropSeeingCorners(s, extra, roofs);
+    return adjacent != diagonal && dropSeeingCorners(s, extra, roofs) && rectangleFigure(s, m, extra, roofs);
 }
 
-static int urSubset(Sudoku *s, const int *cells, int r1, int r2, int extra) {
+static int urSubset(Sudoku *s, int u, int r1, int r2, int extra) {
+    const int *cells = SUDOKU_UNITS[u];
     int n = 0;
     for (int k = 0; k < 9; k++) {
         int c = cells[k];
@@ -895,7 +1038,10 @@ static int urSubset(Sudoku *s, const int *cells, int r1, int r2, int extra) {
         if (__builtin_popcount(m) != size + 1) continue;
         int changed = 0;
         for (int i = 0; i < n; i++) if ((sub & (1 << i)) == 0 && drop(s, s->others[i], m)) changed = 1;
-        if (changed) return 1;
+        if (changed) {
+            for (int i = 0; i < n; i++) if ((sub & (1 << i)) != 0) figCell(s, s->others[i]);
+            return figure(s, SUDOKU_FIG_SUBSET, m, u, 0);
+        }
     }
     return 0;
 }
@@ -910,8 +1056,8 @@ static int urType3(Sudoku *s) {
         if ((s->lc[r1] & m) != m || (s->lc[r2] & m) != m || s->lc[r1] == m || s->lc[r2] == m) continue;
         int extra = (s->lc[r1] | s->lc[r2]) & ~m;
         int line = SUDOKU_ROW[r1] == SUDOKU_ROW[r2] ? SUDOKU_ROW[r1] : 9 + SUDOKU_COL[r1];
-        if (urSubset(s, SUDOKU_UNITS[line], r1, r2, extra)) return 1;
-        if (SUDOKU_BOX[r1] == SUDOKU_BOX[r2] && urSubset(s, SUDOKU_UNITS[18 + SUDOKU_BOX[r1]], r1, r2, extra)) return 1;
+        if (urSubset(s, line, r1, r2, extra)) return rectangleFigure(s, m, extra, (1 << ((k + 2) & 3)) | (1 << ((k + 3) & 3)));
+        if (SUDOKU_BOX[r1] == SUDOKU_BOX[r2] && urSubset(s, 18 + SUDOKU_BOX[r1], r1, r2, extra)) return rectangleFigure(s, m, extra, (1 << ((k + 2) & 3)) | (1 << ((k + 3) & 3)));
     }
     return 0;
 }
@@ -932,15 +1078,16 @@ static int urType4(Sudoku *s) {
         int r1 = corners[(k + 2) & 3];
         int r2 = corners[(k + 3) & 3];
         if ((s->lc[r1] & m) != m || (s->lc[r2] & m) != m || (s->lc[r1] == m && s->lc[r2] == m)) continue;
-        const int *line = SUDOKU_ROW[r1] == SUDOKU_ROW[r2] ? SUDOKU_UNITS[SUDOKU_ROW[r1]] : SUDOKU_UNITS[9 + SUDOKU_COL[r1]];
-        const int *box = SUDOKU_UNITS[18 + SUDOKU_BOX[r1]];
+        int line = SUDOKU_ROW[r1] == SUDOKU_ROW[r2] ? SUDOKU_ROW[r1] : 9 + SUDOKU_COL[r1];
+        int box = 18 + SUDOKU_BOX[r1];
         for (int rest = m; rest != 0; rest &= rest - 1) {
             int x = rest & -rest;
             int y = m & ~x;
-            if (!onlyIn(s, line, x, r1, r2) && !(SUDOKU_BOX[r1] == SUDOKU_BOX[r2] && onlyIn(s, box, x, r1, r2))) continue;
+            int where = onlyIn(s, SUDOKU_UNITS[line], x, r1, r2) ? line : SUDOKU_BOX[r1] == SUDOKU_BOX[r2] && onlyIn(s, SUDOKU_UNITS[box], x, r1, r2) ? box : -1;
+            if (where < 0) continue;
             int a = drop(s, r1, y);
             int b = drop(s, r2, y);
-            if (a || b) return 1;
+            if (a || b) return rectangleFigure(s, m, x, where);
         }
     }
     return 0;
@@ -961,7 +1108,7 @@ static int urType6(Sudoku *s) {
             if (!rows && !cols) continue;
             int a = drop(s, g1, x);
             int b = drop(s, g2, x);
-            if (a || b) return 1;
+            if (a || b) return rectangleFigure(s, m, x, rows ? 0 : 1);
         }
     }
     return 0;
@@ -980,7 +1127,7 @@ static int hiddenRectangle(Sudoku *s) {
             int y = m & ~x;
             if (!onlyIn(s, SUDOKU_UNITS[SUDOKU_ROW[d]], x, d, SUDOKU_ROW[d] * 9 + SUDOKU_COL[a])) continue;
             if (!onlyIn(s, SUDOKU_UNITS[9 + SUDOKU_COL[d]], x, d, SUDOKU_ROW[a] * 9 + SUDOKU_COL[d])) continue;
-            if (drop(s, d, y)) return 1;
+            if (drop(s, d, y)) return rectangleFigure(s, m, x, k);
         }
     }
     return 0;
@@ -994,7 +1141,7 @@ static int urType1(Sudoku *s) {
         if (__builtin_popcount(m) != 2 || s->lc[corners[(k + 2) & 3]] != m || s->lc[corners[(k + 3) & 3]] != m) continue;
         if ((s->lc[target] & m) != m || s->lc[target] == m) continue;
         s->lc[target] &= ~m;
-        return 1;
+        return rectangleFigure(s, m, target, 0);
     }
     return 0;
 }
@@ -1057,7 +1204,7 @@ static int bugPlusOne(Sudoku *s) {
         }
         if (ok) {
             s->lc[tri] = x;
-            return 1;
+            return cellsFigure(s, SUDOKU_FIG_CELLS_ONLY, x, tri, -1, -1, -1, 0, 0);
         }
     }
     return 0;
@@ -1333,6 +1480,7 @@ static int chainFrom(Sudoku *s, int from, int loop, int limit) {
             if ((ch & 1) == 0) continue;
             if (loop ? loopTargets(s, from, ch) : targets(s, from, ch >> 1, 0) && targets(s, from, ch >> 1, 1)) {
                 memcpy(s->elimBest, s->elimTry, sizeof(s->elimBest));
+                keepChain(s, ch);
                 return d;
             }
         }
@@ -1357,7 +1505,7 @@ static int chains(Sudoku *s, int id) {
     if (best == none) return 0;
     for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
     s->stepRating = SUDOKU_TECH_BASE[id] + chainBonus(best);
-    return 1;
+    return chainFigure(s, loop);
 }
 
 static int sueDrop(Sudoku *s, int line, int box, int cs, int ni, int a, int nl, int d, int nb, int lineDigits, int boxDigits) {
@@ -1375,7 +1523,13 @@ static int sueDrop(Sudoku *s, int line, int box, int cs, int ni, int a, int nl, 
         int c = SUDOKU_UNITS[18 + box][k];
         if (keep[c] != 1 && keep[c] != 3 && drop(s, c, boxDigits)) changed = 1;
     }
-    return changed;
+    if (!changed) return 0;
+    for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) figCell(s, s->inter[j]);
+    for (int j = 0; j < nl; j++) if ((a & (1 << j)) != 0) figCell(s, s->lineRest[j]);
+    figure(s, SUDOKU_FIG_LINE, lineDigits, line, __builtin_popcount(cs));
+    for (int j = 0; j < ni; j++) if ((cs & (1 << j)) != 0) figCell(s, s->inter[j]);
+    for (int j = 0; j < nb; j++) if ((d & (1 << j)) != 0) figCell(s, s->boxRest[j]);
+    return figure(s, SUDOKU_FIG_BOX, boxDigits, 18 + box, __builtin_popcount(cs));
 }
 
 static int sueDeCoq(Sudoku *s) {
@@ -1548,7 +1702,7 @@ static int alsXz(Sudoku *s) {
                 for (int rest = s->alsDigits[i] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, i, i, __builtin_ctz(rest))) changed = 1;
                 for (int rest = s->alsDigits[j] & ~rcc; rest != 0; rest &= rest - 1) if (dropSeen(s, j, j, __builtin_ctz(rest))) changed = 1;
             }
-            if (changed) return 1;
+            if (changed) return alsFigure(s, i, 0, 0) && alsFigure(s, j, 1, 0) && figure(s, SUDOKU_FIG_LINKS, rcc, 0, 0);
         }
     }
     return 0;
@@ -1571,7 +1725,7 @@ static int alsXyWing(Sudoku *s) {
                         int y = ys & -ys;
                         int changed = 0;
                         for (int zs = common & ~x & ~y; zs != 0; zs &= zs - 1) if (dropSeen(s, a, b, __builtin_ctz(zs))) changed = 1;
-                        if (changed) return 1;
+                        if (changed) return alsFigure(s, c, 0, 0) && alsFigure(s, a, 1, 0) && alsFigure(s, b, 2, 0) && figure(s, SUDOKU_FIG_LINKS, x, y, 0);
                     }
                 }
             }
@@ -1600,7 +1754,7 @@ static int blossom(Sudoku *s, int k, int count, int z, int s0, int s1, int s2, i
         int t1 = s1 & s->alsSeen[at + 1];
         int t2 = s2 & s->alsSeen[at + 2];
         if ((t0 | t1 | t2) == 0) continue;
-        if (blossom(s, k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return 1;
+        if (blossom(s, k + 1, count, z, t0, t1, t2, u0 | c0, u1 | c1, u2 | c2)) return alsFigure(s, i, k, 0);
     }
     return 0;
 }
@@ -1625,7 +1779,7 @@ static int deathBlossom(Sudoku *s) {
         s->petalStart[k] = n;
         for (int z = 0; z < 9; z++) {
             if ((sm & (1 << z)) != 0) continue;
-            if (blossom(s, 0, k, z, s->digitCells[z * 3], s->digitCells[z * 3 + 1], s->digitCells[z * 3 + 2], 0, 0, 0)) return 1;
+            if (blossom(s, 0, k, z, s->digitCells[z * 3], s->digitCells[z * 3 + 1], s->digitCells[z * 3 + 2], 0, 0, 0)) return cellsFigure(s, SUDOKU_FIG_STEM, 1 << z, stem, -1, -1, -1, 0, 0);
         }
     }
     return 0;
@@ -1666,6 +1820,7 @@ static int alsChainFrom(Sudoku *s, int a, int limit) {
                 s->alsMark[st] = stamp;
                 s->alsFirst[st] = 0;
                 s->alsDepth[st] = 2;
+                s->alsParent[st] = -1 - a;
                 s->alsQueue[tail++] = st;
             }
             s->alsFirst[st] |= 1 << x;
@@ -1679,6 +1834,7 @@ static int alsChainFrom(Sudoku *s, int a, int limit) {
         if (k >= limit) break;
         if (b != a && alsChainTargets(s, a, b, x, s->alsFirst[st])) {
             memcpy(s->elimBest, s->elimTry, sizeof(s->elimBest));
+            keepAlsPath(s, st);
             return k;
         }
         if (k + 1 >= limit) continue;
@@ -1692,6 +1848,7 @@ static int alsChainFrom(Sudoku *s, int a, int limit) {
                     s->alsMark[next] = stamp;
                     s->alsFirst[next] = 0;
                     s->alsDepth[next] = k + 1;
+                    s->alsParent[next] = st;
                     s->alsQueue[tail++] = next;
                 }
                 if (s->alsDepth[next] == k + 1) s->alsFirst[next] |= s->alsFirst[st];
@@ -1714,7 +1871,7 @@ static int alsChain(Sudoku *s) {
     if (best == none) return 0;
     for (int c = 0; c < 81; c++) s->lc[c] &= ~s->elimBest[c];
     s->stepRating = SUDOKU_TECH_BASE[36] + chainBonus(2 * best - 1);
-    return 1;
+    return alsChainFigure(s);
 }
 
 static int reachConsistent(Sudoku *s, int node) {
@@ -1725,6 +1882,10 @@ static int reachConsistent(Sudoku *s, int node) {
     int stamp = s->markValue;
     int origin = node * 2 + 1;
     s->mark[origin] = stamp;
+    s->parent[origin] = -1;
+    s->conflictState = -1;
+    s->conflictCell = -1;
+    s->conflictUnit = -1;
     int head = 0;
     int tail = 0;
     s->queue[tail++] = origin;
@@ -1733,8 +1894,13 @@ static int reachConsistent(Sudoku *s, int node) {
         for (int k = s->linkStart[st]; k < s->linkStart[st + 1]; k++) {
             int ch = s->linkTo[k];
             if (s->mark[ch] == stamp) continue;
-            if (s->mark[ch ^ 1] == stamp) return 0;
+            if (s->mark[ch ^ 1] == stamp) {
+                s->parent[ch] = st;
+                s->conflictState = ch;
+                return 0;
+            }
             s->mark[ch] = stamp;
+            s->parent[ch] = st;
             s->queue[tail++] = ch;
         }
     }
@@ -1748,7 +1914,12 @@ static int reachConsistent(Sudoku *s, int node) {
         if ((st & 1) != 0) s->onMask[c] |= b;
         else s->offMask[c] |= b;
     }
-    for (int c = 0; c < 81; c++) if (s->lc[c] != 0 && (s->lc[c] & ~s->offMask[c]) == 0) return 0;
+    for (int c = 0; c < 81; c++) {
+        if (s->lc[c] != 0 && (s->lc[c] & ~s->offMask[c]) == 0) {
+            s->conflictCell = c;
+            return 0;
+        }
+    }
     for (int u = 0; u < 27; u++) {
         int have = 0;
         int left = 0;
@@ -1757,7 +1928,11 @@ static int reachConsistent(Sudoku *s, int node) {
             have |= s->lc[c];
             left |= s->lc[c] & ~s->offMask[c];
         }
-        if ((have & ~left) != 0) return 0;
+        if ((have & ~left) != 0) {
+            s->conflictUnit = u;
+            s->conflictDigits = have & ~left;
+            return 0;
+        }
     }
     return 1;
 }
@@ -1834,7 +2009,8 @@ static int unitForcing(Sudoku *s) {
     return 0;
 }
 
-static void assign(Sudoku *s, int at, int c, int d) {
+static void assign(Sudoku *s, int at, int c, int d, int why) {
+    if (s->logging && at == 81 * s->logLevel) log(s, c, d, why);
     int keep = ~sudoku_bit(d);
     s->sv[at + c] = d;
     s->sc[at + c] = 0;
@@ -1848,9 +2024,9 @@ static int settle(Sudoku *s, int level) {
         for (int c = 0; c < 81; c++) {
             if (s->sv[at + c] != 0) continue;
             int m = s->sc[at + c];
-            if (m == 0) return 0;
+            if (m == 0) return logConflict(s, level, c, 0, 0);
             if (__builtin_popcount(m) == 1) {
-                assign(s, at, c, sudoku_digit(m));
+                assign(s, at, c, sudoku_digit(m), -1);
                 progress = 1;
             }
         }
@@ -1863,7 +2039,7 @@ static int settle(Sudoku *s, int level) {
                 int c = cells[k];
                 if (s->sv[at + c] != 0) {
                     int b = sudoku_bit(s->sv[at + c]);
-                    if ((placed & b) != 0) return 0;
+                    if ((placed & b) != 0) return logConflict(s, level, -2, u, b);
                     placed |= b;
                     continue;
                 }
@@ -1871,13 +2047,13 @@ static int settle(Sudoku *s, int level) {
                 twice |= once & m;
                 once |= m;
             }
-            if ((once | placed) != SUDOKU_ALL) return 0;
+            if ((once | placed) != SUDOKU_ALL) return logConflict(s, level, -1, u, SUDOKU_ALL & ~(once | placed));
             for (int single = once & ~twice & ~placed; single != 0; single &= single - 1) {
                 int b = single & -single;
                 for (int k = 0; k < 9; k++) {
                     int c = cells[k];
                     if (s->sv[at + c] != 0 || (s->sc[at + c] & b) == 0) continue;
-                    assign(s, at, c, sudoku_digit(b));
+                    assign(s, at, c, sudoku_digit(b), u);
                     progress = 1;
                     break;
                 }
@@ -1899,7 +2075,7 @@ static int branch(Sudoku *s, int level, int from, int cell, int d) {
         memcpy(s->sc + at, s->sc + from * 81, sizeof(int) * 81);
     }
     if ((s->sc[at + cell] & sudoku_bit(d)) == 0) return 0;
-    assign(s, at, cell, d);
+    assign(s, at, cell, d, -2);
     return settleNested(s, level);
 }
 
@@ -1914,6 +2090,7 @@ static int settleNested(Sudoku *s, int level) {
             for (int rest = s->sc[at + q]; rest != 0; rest &= rest - 1) {
                 int b = rest & -rest;
                 if ((s->sc[at + q] & b) == 0 || branch(s, level - 1, level, q, __builtin_ctz(b) + 1)) continue;
+                if (s->logging && at == 81 * s->logLevel) log(s, q, __builtin_ctz(b) + 1, -3);
                 s->sc[at + q] &= ~b;
                 changed = 1;
                 if (!settle(s, level)) return 0;
@@ -2035,6 +2212,7 @@ static int apply(Sudoku *s, int id) {
 }
 
 int sudoku_step(Sudoku *s) {
+    if (s->tracing) traceStart(s);
     for (int k = 0; k < s->techLimit; k++) {
         int id = SUDOKU_TECH_ORDER[k];
         if (s->techOff[id]) continue;

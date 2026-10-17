@@ -13,11 +13,33 @@ final class Trace {
         h2 = h2 * 31 + x;
     }
 
+    static void mixFigures(Sudoku e) {
+        mix(e.figCount);
+        int cell = 0;
+        int elim = 0;
+        for (int f = 0; f < e.figCount; f++) {
+            mix(e.figKind[f]);
+            mix(e.figDigits[f]);
+            mix(e.figA[f]);
+            mix(e.figB[f]);
+            for (; cell < e.figCellEnd[f]; cell++) mix(e.figCells[cell]);
+            for (; elim < e.figElimEnd[f]; elim++) {
+                mix(e.figElimCell[elim]);
+                mix(e.figElimMask[elim]);
+            }
+        }
+        mix(e.conflictState);
+        mix(e.conflictCell);
+        mix(e.conflictUnit);
+        mix(e.conflictDigits);
+    }
+
     public static void main(String[] args) throws IOException {
         Sudoku e = new Sudoku(1);
         if (args.length > 1) {
             for (String id : args[1].split(",")) if (!id.isEmpty()) e.techOff[Integer.parseInt(id)] = true;
         }
+        e.tracing = true;
         StringBuilder out = new StringBuilder();
         int index = 0;
         try (BufferedReader reader = new BufferedReader(new FileReader(args[0]))) {
@@ -40,6 +62,7 @@ final class Trace {
                         mix(e.stepDigit);
                     }
                     for (int c = 0; c < 81; c++) mix(e.candidatesAt(c));
+                    mixFigures(e);
                 }
                 int rating = e.rate(puzzle);
                 String hinted = e.hint(puzzle, puzzle) ? e.hintTech + "/" + e.stepCell + "/" + e.stepDigit : "x";

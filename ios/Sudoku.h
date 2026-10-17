@@ -13,6 +13,26 @@
 #define SUDOKU_TECH_COUNT 45
 #define SUDOKU_MASTER_RATING 65
 #define SUDOKU_LEVELS 5
+#define SUDOKU_FIG_MAX 64
+#define SUDOKU_FIG_CELLS 2048
+#define SUDOKU_FIG_ELIMS 1024
+#define SUDOKU_FIG_POINTING 1
+#define SUDOKU_FIG_CLAIMING 2
+#define SUDOKU_FIG_NAKED 3
+#define SUDOKU_FIG_HIDDEN 4
+#define SUDOKU_FIG_FISH 5
+#define SUDOKU_FIG_CELLS_ONLY 6
+#define SUDOKU_FIG_RECTANGLE 7
+#define SUDOKU_FIG_SUBSET 8
+#define SUDOKU_FIG_CROSS 9
+#define SUDOKU_FIG_PATH 10
+#define SUDOKU_FIG_QUAD 11
+#define SUDOKU_FIG_CHAIN 12
+#define SUDOKU_FIG_ALS 13
+#define SUDOKU_FIG_LINKS 14
+#define SUDOKU_FIG_STEM 15
+#define SUDOKU_FIG_LINE 16
+#define SUDOKU_FIG_BOX 17
 
 typedef struct Sudoku {
     uint32_t rng;
@@ -79,6 +99,35 @@ typedef struct Sudoku {
     int unionMask[81];
     int sv[81 * (SUDOKU_MAX_NEST + 1)];
     int sc[81 * (SUDOKU_MAX_NEST + 1)];
+    int tracing;
+    int traceLc[81];
+    int figCount;
+    int figKind[SUDOKU_FIG_MAX];
+    int figDigits[SUDOKU_FIG_MAX];
+    int figA[SUDOKU_FIG_MAX];
+    int figB[SUDOKU_FIG_MAX];
+    int figCellEnd[SUDOKU_FIG_MAX];
+    int figElimEnd[SUDOKU_FIG_MAX];
+    int figCellCount;
+    int figCells[SUDOKU_FIG_CELLS];
+    int figElimCount;
+    int figElimCell[SUDOKU_FIG_ELIMS];
+    int figElimMask[SUDOKU_FIG_ELIMS];
+    int chainLength;
+    int chainPath[SUDOKU_STATES];
+    int alsParent[SUDOKU_MAX_ALS * 9];
+    int alsPathLength;
+    int alsPath[SUDOKU_MAX_ALS * 9];
+    int conflictState;
+    int conflictCell;
+    int conflictUnit;
+    int conflictDigits;
+    int logging;
+    int logLevel;
+    int logCount;
+    int logCell[4096];
+    int logDigit[4096];
+    int logWhy[4096];
     int techLimit;
     unsigned char techOff[SUDOKU_TECH_COUNT];
     int stepRating;

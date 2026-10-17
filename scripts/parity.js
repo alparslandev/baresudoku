@@ -31,11 +31,31 @@ for (let i = 0; i < count && !fs.existsSync(file); i++) {
 if (fs.existsSync(file)) lines.splice(0, lines.length, ...fs.readFileSync(file, 'utf8').trim().split('\n'));
 else fs.writeFileSync(file, lines.join('\n') + '\n');
 for (const id of off) e.techOff[id] = 1;
+e.tracing = true;
 
 let h1 = 0, h2 = 0;
 const mix = x => {
   h1 = Math.imul(h1 ^ x, 16777619) >>> 0;
   h2 = (Math.imul(h2, 31) + x) >>> 0;
+};
+const mixFigures = () => {
+  mix(e.figCount);
+  let cell = 0, elim = 0;
+  for (let f = 0; f < e.figCount; f++) {
+    mix(e.figKind[f]);
+    mix(e.figDigits[f]);
+    mix(e.figA[f]);
+    mix(e.figB[f]);
+    for (; cell < e.figCellEnd[f]; cell++) mix(e.figCells[cell]);
+    for (; elim < e.figElimEnd[f]; elim++) {
+      mix(e.figElimCell[elim]);
+      mix(e.figElimMask[elim]);
+    }
+  }
+  mix(e.conflictState);
+  mix(e.conflictCell);
+  mix(e.conflictUnit);
+  mix(e.conflictDigits);
 };
 const out = [];
 lines.forEach((line, index) => {
@@ -55,6 +75,7 @@ lines.forEach((line, index) => {
       mix(e.stepDigit);
     }
     for (let c = 0; c < 81; c++) mix(e.lc[c]);
+    mixFigures();
   }
   const rating = e.rate(puzzle);
   const hinted = e.hint(puzzle, puzzle) ? e.hintTech + '/' + e.stepCell + '/' + e.stepDigit : 'x';
