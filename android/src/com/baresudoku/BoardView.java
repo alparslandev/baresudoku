@@ -58,6 +58,9 @@ final class BoardView extends View implements Runnable {
     static final int S_TIMER = S_MASTER + 10;
     static final int S_COLOR = S_MASTER + 11;
     static final int S_CORNER = S_MASTER + 12;
+    static final int S_RATE_ASK = S_MASTER + 13;
+    static final int S_RATE = S_MASTER + 14;
+    static final int S_LATER = S_MASTER + 15;
     static final int[] PALETTE_LIGHT = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
     static final int[] PALETTE_DARK = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
     static final int TOOLS = 6;
@@ -77,7 +80,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master",
         "Daily Sudoku", "Share", "Play Sudoku", "Statistics", "Solved", "Best time", "Average time", "Daily streak",
-        "Explain", "Show timer", "Color", "Corner"};
+        "Explain", "Show timer", "Color", "Corner", "Enjoying Bare Sudoku?", "Rate", "Later"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -92,7 +95,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta",
         "Günlük Sudoku", "Paylaş", "Sudoku oyna", "İstatistik", "Çözülen", "En iyi süre", "Ortalama süre", "Günlük seri",
-        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe"};
+        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "Bare Sudoku'yu beğendin mi?", "Değerlendir", "Sonra"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -494,6 +497,7 @@ final class BoardView extends View implements Runnable {
             if (!MainActivity.recorded) {
                 MainActivity.recorded = true;
                 MainActivity.recordSolved(game.level, (int) (game.time(now) / 1000), MainActivity.dailyDate);
+                host.requestReviewIfDue();
             }
         }
         if (changed) MainActivity.save();

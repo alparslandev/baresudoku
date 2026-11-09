@@ -1,6 +1,8 @@
 package com.baresudoku;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -177,6 +179,53 @@ public class MainActivity extends Activity implements Runnable {
             startActivity(Intent.createChooser(send, null));
         } catch (RuntimeException e) {
             return;
+        }
+    }
+
+    static final int[] REVIEW_MILESTONES = {3, 10, 30};
+
+    static boolean reviewDue() {
+        int[] a = stats();
+        int total = 0;
+        for (int level = 0; level < Sudoku.LEVELS; level++) total += a[level * 4 + 1];
+        int asked = prefs.getInt("rv", 0);
+        for (int i = REVIEW_MILESTONES.length - 1; i >= 0; i--) {
+            int milestone = REVIEW_MILESTONES[i];
+            if (total < milestone) continue;
+            if (asked >= milestone) return false;
+            prefs.edit().putInt("rv", milestone).apply();
+            return true;
+        }
+        return false;
+    }
+
+    void requestReviewIfDue() {
+        if (!reviewDue()) return;
+        view.postDelayed(new Runnable() {
+            public void run() {
+                if (resumed) askReview();
+            }
+        }, 1500);
+    }
+
+    void askReview() {
+        new AlertDialog.Builder(this)
+            .setMessage(view.text[BoardView.S_RATE_ASK])
+            .setPositiveButton(view.text[BoardView.S_RATE], new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int which) {
+                    prefs.edit().putInt("rv", Integer.MAX_VALUE).apply();
+                    openStore();
+                }
+            })
+            .setNegativeButton(view.text[BoardView.S_LATER], null)
+            .show();
+    }
+
+    void openStore() {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.baresudoku")));
+        } catch (RuntimeException e) {
+            open("https://play.google.com/store/apps/details?id=com.baresudoku");
         }
     }
 
