@@ -10,7 +10,7 @@
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
     S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
     S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7, S_DAILY, S_SHARE, S_PLAY, S_STATS, S_PLAYED, S_BEST, S_AVERAGE, S_STREAK,
-    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER, S_RATE_ASK, S_RATE, S_LATER };
+    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER, S_RATE };
 enum { IDLE_MS = 60000, MENU_MAX = 12, TOOLS = 6 };
 static const uint32_t PALETTE_LIGHT[7] = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
 static const uint32_t PALETTE_DARK[7] = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
@@ -29,7 +29,7 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
     @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
-    @"Explain", @"Show timer", @"Color", @"Corner", @"Enjoying Bare Sudoku?", @"Rate", @"Later"};
+    @"Explain", @"Show timer", @"Color", @"Corner", @"★ Rate Bare Sudoku"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -44,7 +44,7 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
     @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
-    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"Bare Sudoku'yu beğendin mi?", @"Değerlendir", @"Sonra"};
+    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"★ Bare Sudoku'yu değerlendir"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;

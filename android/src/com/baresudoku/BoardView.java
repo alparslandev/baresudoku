@@ -58,9 +58,7 @@ final class BoardView extends View implements Runnable {
     static final int S_TIMER = S_MASTER + 10;
     static final int S_COLOR = S_MASTER + 11;
     static final int S_CORNER = S_MASTER + 12;
-    static final int S_RATE_ASK = S_MASTER + 13;
-    static final int S_RATE = S_MASTER + 14;
-    static final int S_LATER = S_MASTER + 15;
+    static final int S_RATE = S_MASTER + 13;
     static final int[] PALETTE_LIGHT = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
     static final int[] PALETTE_DARK = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
     static final int TOOLS = 6;
@@ -80,7 +78,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master",
         "Daily Sudoku", "Share", "Play Sudoku", "Statistics", "Solved", "Best time", "Average time", "Daily streak",
-        "Explain", "Show timer", "Color", "Corner", "Enjoying Bare Sudoku?", "Rate", "Later"};
+        "Explain", "Show timer", "Color", "Corner", "★ Rate Bare Sudoku"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -95,7 +93,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta",
         "Günlük Sudoku", "Paylaş", "Sudoku oyna", "İstatistik", "Çözülen", "En iyi süre", "Ortalama süre", "Günlük seri",
-        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "Bare Sudoku'yu beğendin mi?", "Değerlendir", "Sonra"};
+        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "★ Bare Sudoku'yu değerlendir"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -497,7 +495,7 @@ final class BoardView extends View implements Runnable {
             if (!MainActivity.recorded) {
                 MainActivity.recorded = true;
                 MainActivity.recordSolved(game.level, (int) (game.time(now) / 1000), MainActivity.dailyDate);
-                host.requestReviewIfDue();
+                MainActivity.offerReviewIfDue();
             }
         }
         if (changed) MainActivity.save();
@@ -717,9 +715,11 @@ final class BoardView extends View implements Runnable {
 
     private int[][] buildMenuSpec() {
         boolean solved = game.active && game.solved;
-        int n = (solved ? 1 : 0) + 7 + (cancellable() ? 2 : 0);
+        boolean rate = solved && MainActivity.reviewOffered;
+        int n = (solved ? 1 : 0) + (rate ? 1 : 0) + 7 + (cancellable() ? 2 : 0);
         int[][] rows = new int[n][];
         int k = 0;
+        if (rate) rows[k++] = new int[] {413};
         if (solved) rows[k++] = new int[] {412};
         for (int level = 0; level < 5; level++) rows[k++] = new int[] {400 + level};
         rows[k++] = new int[] {405, 408};
@@ -838,6 +838,8 @@ final class BoardView extends View implements Runnable {
             sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
         } else if (t == 412 && game.active && game.solved) {
             host.share(shareText());
+        } else if (t == 413 && game.active && game.solved) {
+            host.rateTapped();
         } else if (t == 406 && cancellable()) {
             game.restart();
             MainActivity.save();
@@ -979,6 +981,7 @@ final class BoardView extends View implements Runnable {
         if (id == 409) return text[MainActivity.dailyMenu ? S_PLAY : S_DAILY];
         if (id == 411) return text[S_STATS];
         if (id == 412) return text[S_SHARE];
+        if (id == 413) return text[S_RATE];
         return text[id == 406 ? S_RESTART : S_CANCEL];
     }
 

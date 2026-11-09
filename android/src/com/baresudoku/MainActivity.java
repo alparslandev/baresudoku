@@ -1,8 +1,6 @@
 package com.baresudoku;
 
 import android.app.Activity;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
@@ -24,6 +22,7 @@ public class MainActivity extends Activity implements Runnable {
     static boolean dailyMenu;
     static boolean showTimer = true;
     static boolean recorded;
+    static boolean reviewOffered;
 
     BoardView view;
     boolean resumed;
@@ -194,28 +193,14 @@ public class MainActivity extends Activity implements Runnable {
         return true;
     }
 
-    void requestReviewIfDue() {
-        if (!reviewDue()) return;
-        view.postDelayed(new Runnable() {
-            public void run() {
-                if (resumed) askReview();
-            }
-        }, 1500);
+    static void offerReviewIfDue() {
+        reviewOffered = reviewDue();
     }
 
-    void askReview() {
-        AlertDialog dialog = new AlertDialog.Builder(this)
-            .setMessage(view.text[BoardView.S_RATE_ASK])
-            .setPositiveButton(view.text[BoardView.S_RATE], new DialogInterface.OnClickListener() {
-                public void onClick(DialogInterface dialog, int which) {
-                    prefs.edit().putInt("rv", Integer.MAX_VALUE).apply();
-                    openStore();
-                }
-            })
-            .setNegativeButton(view.text[BoardView.S_LATER], null)
-            .create();
-        dialog.setCanceledOnTouchOutside(false);
-        dialog.show();
+    void rateTapped() {
+        prefs.edit().putInt("rv", Integer.MAX_VALUE).apply();
+        reviewOffered = false;
+        openStore();
     }
 
     void openStore() {
@@ -238,6 +223,7 @@ public class MainActivity extends Activity implements Runnable {
         }
         dailyDate = day;
         recorded = false;
+        reviewOffered = false;
         recordStart(level);
         save();
         pendingLevel = -1;
