@@ -16,7 +16,7 @@ else
   PLATFORM=iphoneos
 fi
 xcrun -sdk $SDK clang -arch arm64 $MINFLAG -Oz -fobjc-arc -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-exceptions -fno-objc-exceptions \
-  -Wall -Wno-unused-parameter $EXTRA -framework UIKit -framework Foundation -framework CoreGraphics -Wl,-dead_strip -Wl,-no_data_const -Wl,-no_function_starts \
+  -Wall -Wno-unused-parameter $EXTRA -framework UIKit -framework Foundation -framework CoreGraphics -framework StoreKit -Wl,-dead_strip -Wl,-no_data_const -Wl,-no_function_starts \
   -o "$APP/BareSudoku" main.m Sudoku.c Game.c
 strip "$APP/BareSudoku"
 rsvg-convert -w 1024 -h 1024 icon.svg -o "$OUT/icon/A.xcassets/AppIcon.appiconset/icon.png"
