@@ -182,21 +182,16 @@ public class MainActivity extends Activity implements Runnable {
         }
     }
 
-    static final int[] REVIEW_MILESTONES = {3, 10, 30};
+    static final int REVIEW_EVERY = 2;
 
     static boolean reviewDue() {
         int[] a = stats();
         int total = 0;
         for (int level = 0; level < Sudoku.LEVELS; level++) total += a[level * 4 + 1];
         int asked = prefs.getInt("rv", 0);
-        for (int i = REVIEW_MILESTONES.length - 1; i >= 0; i--) {
-            int milestone = REVIEW_MILESTONES[i];
-            if (total < milestone) continue;
-            if (asked >= milestone) return false;
-            prefs.edit().putInt("rv", milestone).apply();
-            return true;
-        }
-        return false;
+        if (asked == Integer.MAX_VALUE || total < REVIEW_EVERY || total - asked < REVIEW_EVERY) return false;
+        prefs.edit().putInt("rv", total).apply();
+        return true;
     }
 
     void requestReviewIfDue() {

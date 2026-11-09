@@ -135,19 +135,14 @@ static void recordSolved(int level, int seconds, NSString *day) {
     if (day.length) logDaily(day);
 }
 
-static const int REVIEW_MILESTONES[] = {3, 10, 30};
+static const int REVIEW_EVERY = 2;
 
 static BOOL reviewDue(int solvedTotal) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     int asked = (int)[defaults integerForKey:@"rv"];
-    for (int i = 2; i >= 0; i--) {
-        int milestone = REVIEW_MILESTONES[i];
-        if (solvedTotal < milestone) continue;
-        if (asked >= milestone) return NO;
-        [defaults setInteger:milestone forKey:@"rv"];
-        return YES;
-    }
-    return NO;
+    if (solvedTotal < REVIEW_EVERY || solvedTotal - asked < REVIEW_EVERY) return NO;
+    [defaults setInteger:solvedTotal forKey:@"rv"];
+    return YES;
 }
 
 static int dailyStreak(void) {
@@ -1471,6 +1466,18 @@ static BoardView *current;
     if (step < 7) [self performSelector:@selector(selftest:) withObject:@(step + 1) afterDelay:1.5];
 }
 
+- (void)solveTest:(NSNumber *)stepNumber {
+    int step = stepNumber.intValue;
+    if (step == 0) [self press:[self menuPointOf:400]];
+    else if (game.active && !game.solved && pendingLevel < 0) {
+        CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
+        [self press:hint];
+        [self press:hint];
+    }
+    NSLog(@"solvetest %d: active=%d solved=%d", step, game.active, game.solved);
+    if (!game.solved && step < 400) [self performSelector:@selector(solveTest:) withObject:@(step + 1) afterDelay:0.3];
+}
+
 - (void)snapshot:(NSString *)name {
     const char *dir = getenv("BARESUDOKU_SHOTS");
     if (!dir) return;
@@ -1554,7 +1561,8 @@ static BoardView *current;
     static BOOL started;
     if (getenv("BARESUDOKU_SELFTEST") && !started) {
         started = YES;
-        SEL run = strcmp(getenv("BARESUDOKU_SELFTEST"), "demo") == 0 ? @selector(demo:) : @selector(selftest:);
+        const char *mode = getenv("BARESUDOKU_SELFTEST");
+        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "solve") == 0 ? @selector(solveTest:) : @selector(selftest:);
         [current performSelector:run withObject:@0 afterDelay:1.5];
     }
 #endif
