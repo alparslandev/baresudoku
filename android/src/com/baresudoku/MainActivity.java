@@ -204,7 +204,7 @@ public class MainActivity extends Activity implements Runnable {
     }
 
     void askReview() {
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
             .setMessage(view.text[BoardView.S_RATE_ASK])
             .setPositiveButton(view.text[BoardView.S_RATE], new DialogInterface.OnClickListener() {
                 public void onClick(DialogInterface dialog, int which) {
@@ -213,7 +213,9 @@ public class MainActivity extends Activity implements Runnable {
                 }
             })
             .setNegativeButton(view.text[BoardView.S_LATER], null)
-            .show();
+            .create();
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
     }
 
     void openStore() {
