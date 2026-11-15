@@ -25,6 +25,8 @@ static NSString *const SUPPORTER_PRODUCT = @"com.baresudoku.supporter";
 static NSString *const TIP_PRODUCTS[TIPS] = {@"com.baresudoku.tip.small", @"com.baresudoku.tip.medium", @"com.baresudoku.tip.large"};
 static NSString *const TIP_HEARTS[TIPS] = {@"\u2665", @"\u2665\u2665", @"\u2665\u2665\u2665"};
 static NSString *const ARCHIVE_FIRST = @"2025-01-01";
+static const CGFloat SUPPORT_BUTTONS_TOP = 3.2;
+static const CGFloat SUPPORT_PANEL_ROWS = SUPPORT_BUTTONS_TOP + 5.2;
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -41,7 +43,7 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
     @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
     @"Explain", @"Show timer", @"Color", @"Corner", @"★ Rate Bare Sudoku", @"\u2665 Support Bare Sudoku", @"\u2665 Supporter",
-    @"Bare Sudoku stays free, with no ads.", @"Supporters get Killer, Diagonal, Mini 6\u00d76, themes and the daily archive.", @"Become a supporter",
+    @"Bare Sudoku stays free, with no ads.", @"Supporters get Killer, Diagonal, Mini\u00a06\u00d76, themes and the daily archive.", @"Become a supporter",
     @"Tip", @"Restore purchases", @"Thank you for your support!", @"Waiting for the App Store\u2026", @"Purchase failed",
     @"App Store is not available", @"No purchases to restore", @"Theme", @"Blue", @"Green", @"Purple", @"Teal",
     @"\u2039 Previous day", @"Next day \u203a", @"Variants", @"Only place for # in this diagonal", @"This cell is #",
@@ -61,7 +63,7 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
     @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
     @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"★ Bare Sudoku'yu değerlendir", @"\u2665 Bare Sudoku'ya destek ol", @"\u2665 Destekçi",
-    @"Bare Sudoku ücretsiz ve reklamsız kalır.", @"Destekçilere Killer, Diagonal, Mini 6\u00d76, temalar ve günlük arşiv açılır.", @"Destekçi ol",
+    @"Bare Sudoku ücretsiz ve reklamsız kalır.", @"Destekçilere Killer, Diagonal, Mini\u00a06\u00d76, temalar ve günlük arşiv açılır.", @"Destekçi ol",
     @"Bahşiş", @"Satın alımları geri yükle", @"Desteğin için teşekkürler!", @"App Store bekleniyor\u2026", @"Satın alma tamamlanamadı",
     @"App Store'a ulaşılamıyor", @"Geri yüklenecek satın alma yok", @"Tema", @"Mavi", @"Yeşil", @"Mor", @"Turkuaz",
     @"\u2039 Önceki gün", @"Sonraki gün \u203a", @"Varyantlar", @"Bu köşegende # için tek yer", @"Bu hücre #",
@@ -287,6 +289,17 @@ static void fillRect(CGFloat l, CGFloat t, CGFloat r, CGFloat b, UIColor *color,
     CGRect rect = CGRectMake(l, t, r - l, b - t);
     if (radius > 0) [[UIBezierPath bezierPathWithRoundedRect:rect cornerRadius:radius] fill];
     else UIRectFill(rect);
+}
+
+static NSArray *wrapInTwo(NSString *s, CGFloat size, int style, CGFloat maxWidth) {
+    if (textWidth(s, size, style) <= maxWidth) return @[s];
+    NSUInteger middle = s.length / 2, best = NSNotFound;
+    for (NSUInteger i = 0; i < s.length; i++) {
+        if ([s characterAtIndex:i] != ' ') continue;
+        if (best == NSNotFound || labs((long)i - (long)middle) < labs((long)best - (long)middle)) best = i;
+    }
+    if (best == NSNotFound) return @[s];
+    return @[[s substringToIndex:best], [s substringFromIndex:best + 1]];
 }
 
 static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
@@ -1302,8 +1315,9 @@ static NSString *priceOf(NSString *identifier) {
 
 - (void)offerSupportSoon {
     if (supporter) return;
+    [store load];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!supporter && game.active && game.solved && pendingLevel < 0 && !statsOpen && !supportOpen) [self openSupport];
+        if (!supporter && products[SUPPORTER_PRODUCT] && game.active && game.solved && pendingLevel < 0 && !statsOpen && !supportOpen) [self openSupport];
     });
 }
 
@@ -1424,18 +1438,18 @@ static NSString *priceOf(NSString *identifier) {
     CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
     CGFloat base = MIN(w - insetL - insetR, h - insetT - insetB);
     supportW = base * 0.9;
-    supportRowH = MIN(base * 0.095, (h - insetT - insetB) * 0.94 / 8);
+    supportRowH = MIN(base * 0.095, (h - insetT - insetB) * 0.94 / SUPPORT_PANEL_ROWS);
     supportX = insetL + (w - insetL - insetR - supportW) / 2;
-    supportTop = insetT + (h - insetT - insetB - supportRowH * 8) / 2;
+    supportTop = insetT + (h - insetT - insetB - supportRowH * SUPPORT_PANEL_ROWS) / 2;
 }
 
 - (CGRect)supportRect:(int)target {
     CGFloat side = supportRowH * 0.4, gap = supportRowH * 0.12, full = supportW - 2 * side;
     if (target >= 442 && target < 442 + TIPS) {
         CGFloat w = (full - gap * (TIPS - 1)) / TIPS;
-        return CGRectMake(supportX + side + (target - 442) * (w + gap), supportTop + supportRowH * 3.8, w, supportRowH);
+        return CGRectMake(supportX + side + (target - 442) * (w + gap), supportTop + supportRowH * (SUPPORT_BUTTONS_TOP + 1), w, supportRowH);
     }
-    CGFloat row = target == 441 ? 2.8 : target == 445 ? 4.8 : 6.6;
+    CGFloat row = SUPPORT_BUTTONS_TOP + (target == 441 ? 0 : target == 445 ? 2 : 3.8);
     return CGRectMake(supportX + side, supportTop + supportRowH * row, full, supportRowH);
 }
 
@@ -1470,12 +1484,22 @@ static NSString *priceOf(NSString *identifier) {
     UIRectFillUsingBlendMode(self.bounds, kCGBlendModeNormal);
     [self layoutSupport];
     CGFloat h = supportRowH;
-    fillRect(supportX, supportTop, supportX + supportW, supportTop + h * 8, cPanel, h * 0.3);
+    fillRect(supportX, supportTop, supportX + supportW, supportTop + h * SUPPORT_PANEL_ROWS, cPanel, h * 0.3);
     CGFloat cx = supportX + supportW / 2;
     NSString *title = text[supporter ? S_SUPPORTER : S_SUPPORT];
     drawText(title, cx, supportTop + h * 0.75, fit(title, h * 0.5, supportW * 0.9), cKeyText, 1);
-    drawText(text[S_SUPPORT_FREE], cx, supportTop + h * 1.75, fit(text[S_SUPPORT_FREE], h * 0.34, supportW * 0.9), cMuted, 0);
-    drawText(text[S_SUPPORT_PERKS], cx, supportTop + h * 2.3, fit(text[S_SUPPORT_PERKS], h * 0.34, supportW * 0.9), cMuted, 0);
+    drawText(text[S_SUPPORT_FREE], cx, supportTop + h * 1.6, fit(text[S_SUPPORT_FREE], h * 0.32, supportW * 0.9), cMuted, 0);
+    CGFloat perkWidth = supportW * 0.9, perkSize = h * 0.42;
+    NSArray *perks = wrapInTwo(text[S_SUPPORT_PERKS], perkSize, 1, perkWidth);
+    for (NSString *line in perks) {
+        CGFloat width = textWidth(line, perkSize, 1);
+        if (width > perkWidth) perkSize *= perkWidth / width;
+    }
+    CGFloat perkY = supportTop + h * (perks.count == 1 ? 2.45 : 2.2);
+    for (NSString *line in perks) {
+        drawText(line, cx, perkY, perkSize, cKeyText, 1);
+        perkY += h * 0.55;
+    }
     CGFloat inset = h * 0.08;
     for (int target = 441; target <= 446; target++) {
         CGRect r = [self supportRect:target];
@@ -1485,7 +1509,7 @@ static NSString *priceOf(NSString *identifier) {
         drawText(label, CGRectGetMidX(r), CGRectGetMidY(r), fit(label, h * 0.4, r.size.width * 0.9), buy ? cBg : cKeyText, buy ? 1 : 0);
     }
     NSString *status = [self supportStatus];
-    if (status) drawText(status, cx, supportTop + h * 6.2, fit(status, h * 0.34, supportW * 0.9), storeStatus == S_THANKS ? cAccent : cMuted, 0);
+    if (status) drawText(status, cx, supportTop + h * (SUPPORT_BUTTONS_TOP + 3.4), fit(status, h * 0.34, supportW * 0.9), storeStatus == S_THANKS ? cAccent : cMuted, 0);
 #if TARGET_OS_TV
     NSArray *targets = [self supportTargets];
     supportCursor = MAX(0, MIN((int)targets.count - 1, supportCursor));
@@ -1495,7 +1519,7 @@ static NSString *priceOf(NSString *identifier) {
 
 - (int)supportTargetAt:(CGPoint)p {
     [self layoutSupport];
-    if (p.x < supportX || p.x > supportX + supportW || p.y < supportTop || p.y > supportTop + supportRowH * 8) return 446;
+    if (p.x < supportX || p.x > supportX + supportW || p.y < supportTop || p.y > supportTop + supportRowH * SUPPORT_PANEL_ROWS) return 446;
     for (NSNumber *number in [self supportTargets]) if (CGRectContainsPoint([self supportRect:number.intValue], p)) return number.intValue;
     return 440;
 }
@@ -1856,13 +1880,13 @@ static NSString *priceOf(NSString *identifier) {
         if (supportOpen) {
             [self layoutSupport];
             NSString *info = [NSString stringWithFormat:@"%@. %@. %@", text[supporter ? S_SUPPORTER : S_SUPPORT], text[S_SUPPORT_FREE], text[S_SUPPORT_PERKS]];
-            [list addObject:[self axElement:440 frame:CGRectMake(supportX, supportTop, supportW, supportRowH * 2.6) label:info value:nil traits:UIAccessibilityTraitHeader]];
+            [list addObject:[self axElement:440 frame:CGRectMake(supportX, supportTop, supportW, supportRowH * (SUPPORT_BUTTONS_TOP - 0.1)) label:info value:nil traits:UIAccessibilityTraitHeader]];
             for (NSNumber *number in [self supportTargets]) {
                 int target = number.intValue;
                 [list addObject:[self axElement:target frame:[self supportRect:target] label:[self supportLabel:target spoken:YES] value:nil traits:UIAccessibilityTraitButton]];
             }
             NSString *status = [self supportStatus];
-            if (status) [list addObject:[self axElement:447 frame:CGRectMake(supportX, supportTop + supportRowH * 5.8, supportW, supportRowH * 0.8) label:status value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
+            if (status) [list addObject:[self axElement:447 frame:CGRectMake(supportX, supportTop + supportRowH * (SUPPORT_BUTTONS_TOP + 3), supportW, supportRowH * 0.8) label:status value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
             return list;
         }
         [self layoutMenu];
