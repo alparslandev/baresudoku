@@ -1778,6 +1778,22 @@ static NSString *priceOf(NSString *identifier) {
     if (!game.solved && step < 400) [self performSelector:@selector(solveTest:) withObject:@(step + 1) afterDelay:0.3];
 }
 
+- (void)supportTest:(NSNumber *)stepNumber {
+    int step = stepNumber.intValue;
+    CGPoint menuButton = CGPointMake(topX + topW - topH * 0.45, topY + topH / 2);
+    if (step == 0) [self press:[self menuPointOf:413]];
+    else if (step == 1) [self snapshot:@"support-1"];
+    else if (step == 2) { [self layoutSupport]; CGRect r = [self supportRect:446]; [self press:CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r))]; }
+    else if (step == 3) { unlockSupporter(); [self applyTheme]; [self press:[self menuPointOf:413]]; [self layoutSupport]; CGRect r = [self supportRect:441]; [self press:CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r))]; [self snapshot:@"support-2-supporter"]; }
+    else if (step == 4) { [self closeSupport]; [self press:[self menuPointOf:409]]; [self press:[self menuPointOf:415]]; [self snapshot:@"support-3-archive"]; }
+    else if (step == 5) [self press:[self menuPointOf:401]];
+    else if (step == 6) [self snapshot:@"support-4-board"];
+    else if (step == 7) { [self press:menuButton]; [self snapshot:@"support-5-menu"]; }
+    NSLog(@"supporttest %d: menu=%d support=%d supporter=%d theme=%d day=%@ daily=%@ archive=%d status=%@", step, menuOpen, supportOpen, supporter, theme, dailyDay, dailyDate, dailyArchive, [self supportStatus]);
+    [self axDump:step];
+    if (step < 7) [self performSelector:@selector(supportTest:) withObject:@(step + 1) afterDelay:1.5];
+}
+
 - (void)snapshot:(NSString *)name {
     const char *dir = getenv("BARESUDOKU_SHOTS");
     if (!dir) return;
@@ -1862,7 +1878,7 @@ static NSString *priceOf(NSString *identifier) {
     if (getenv("BARESUDOKU_SELFTEST") && !started) {
         started = YES;
         const char *mode = getenv("BARESUDOKU_SELFTEST");
-        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "solve") == 0 ? @selector(solveTest:) : @selector(selftest:);
+        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "solve") == 0 ? @selector(solveTest:) : strcmp(mode, "support") == 0 ? @selector(supportTest:) : @selector(selftest:);
         [current performSelector:run withObject:@0 afterDelay:1.5];
     }
 #endif
