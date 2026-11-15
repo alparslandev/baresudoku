@@ -1980,7 +1980,7 @@ static NSString *priceOf(NSString *identifier) {
 - (void)supportTest:(NSNumber *)stepNumber {
     int step = stepNumber.intValue;
     CGPoint menuButton = CGPointMake(topX + topW - topH * 0.45, topY + topH / 2);
-    if (step == 0) [self press:[self menuPointOf:413]];
+    if (step == 0) { [self snapshot:@"support-0-menu"]; [self press:[self menuPointOf:413]]; }
     else if (step == 1) [self snapshot:@"support-1"];
     else if (step == 2) { [self layoutSupport]; CGRect r = [self supportRect:446]; [self press:CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r))]; }
     else if (step == 3) { unlockSupporter(); [self applyTheme]; [self press:[self menuPointOf:413]]; [self layoutSupport]; CGRect r = [self supportRect:441]; [self press:CGPointMake(CGRectGetMidX(r), CGRectGetMidY(r))]; [self snapshot:@"support-2-supporter"]; }
@@ -1991,6 +1991,27 @@ static NSString *priceOf(NSString *identifier) {
     NSLog(@"supporttest %d: menu=%d support=%d supporter=%d theme=%d day=%@ daily=%@ archive=%d status=%@", step, menuOpen, supportOpen, supporter, theme, dailyDay, dailyDate, dailyArchive, [self supportStatus]);
     [self axDump:step];
     if (step < 7) [self performSelector:@selector(supportTest:) withObject:@(step + 1) afterDelay:1.5];
+}
+
+- (void)variants:(NSNumber *)stepNumber {
+    int step = stepNumber.intValue;
+    if (pendingLevel >= 0) {
+        [self performSelector:@selector(variants:) withObject:stepNumber afterDelay:0.5];
+        return;
+    }
+    if (step == 0) unlockSupporter();
+    static const int menuSteps[3][2] = {{450, 401}, {451, 402}, {452, 400}};
+    CGPoint hint = CGPointMake(toolX[4] + toolW / 2, toolY + toolH / 2);
+    int round = step / 5, phase = step % 5;
+    if (round < 3) {
+        if (phase == 0) { if (!menuOpen) [self press:CGPointMake(topX + topW - topH * 0.45, topY + topH / 2)]; [self press:[self menuPointOf:417]]; }
+        else if (phase == 1) [self press:[self menuPointOf:menuSteps[round][0]]];
+        else if (phase == 2) [self press:[self menuPointOf:menuSteps[round][1]]];
+        else if (phase == 3) { [self press:hint]; [self snapshot:[NSString stringWithFormat:@"v%d-hint", round]]; [self axDump:step]; }
+        else { [self press:hint]; [self press:CGPointMake(toolX[3] + toolW / 2, toolY + toolH / 2)]; [self snapshot:[NSString stringWithFormat:@"v%d-notes", round]]; }
+    }
+    NSLog(@"variants %d: kind=%d size=%d n=%d active=%d hint=%d menu=%d variantsOpen=%d", step, variant ? variant->shape.kind : -1, game.size, game.n, game.active, game.hintKind, menuOpen, variantsOpen);
+    if (step < 14) [self performSelector:@selector(variants:) withObject:@(step + 1) afterDelay:1.0];
 }
 
 - (void)snapshot:(NSString *)name {
@@ -2077,7 +2098,7 @@ static NSString *priceOf(NSString *identifier) {
     if (getenv("BARESUDOKU_SELFTEST") && !started) {
         started = YES;
         const char *mode = getenv("BARESUDOKU_SELFTEST");
-        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "solve") == 0 ? @selector(solveTest:) : strcmp(mode, "support") == 0 ? @selector(supportTest:) : @selector(selftest:);
+        SEL run = strcmp(mode, "demo") == 0 ? @selector(demo:) : strcmp(mode, "solve") == 0 ? @selector(solveTest:) : strcmp(mode, "support") == 0 ? @selector(supportTest:) : strcmp(mode, "variants") == 0 ? @selector(variants:) : @selector(selftest:);
         [current performSelector:run withObject:@0 afterDelay:1.5];
     }
 #endif
