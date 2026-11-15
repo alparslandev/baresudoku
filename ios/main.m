@@ -1,19 +1,28 @@
 #import <UIKit/UIKit.h>
-#if !TARGET_OS_TV
 #import <StoreKit/StoreKit.h>
-#endif
 #include <string.h>
 #include <time.h>
 #include "Sudoku.h"
 #include "Game.h"
 
+enum { THEMES = 4, TIPS = 3 };
 enum { S_UNDO = 4, S_ERASE, S_NOTE, S_FILL, S_HINT, S_NEW, S_ERRORS, S_ON, S_OFF, S_CANCEL, S_SOLVED, S_PREPARING,
     S_WRONG, S_NAKED, S_ROW, S_COL, S_BOX, S_AGAIN, S_TECH, S_TITLE = 28, S_RESTART = 29, S_ROWLABEL = 30, S_COLLABEL = 31, S_LEFT = 32, S_TECH_EXTRA = 33,
     S_MASTER = S_TECH_EXTRA + SUDOKU_TECH_COUNT - 7, S_DAILY, S_SHARE, S_PLAY, S_STATS, S_PLAYED, S_BEST, S_AVERAGE, S_STREAK,
-    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER, S_RATE };
+    S_EXPLAIN, S_TIMER, S_COLOR, S_CORNER, S_RATE, S_SUPPORT, S_SUPPORTER, S_SUPPORT_FREE, S_SUPPORT_PERKS, S_BECOME,
+    S_TIP, S_RESTORE, S_THANKS, S_STORE_WAIT, S_STORE_FAIL, S_STORE_OFF, S_NOTHING, S_THEME, S_THEME_NAME,
+    S_PREV_DAY = S_THEME_NAME + THEMES, S_NEXT_DAY };
 enum { IDLE_MS = 60000, MENU_MAX = 12, TOOLS = 6 };
 static const uint32_t PALETTE_LIGHT[7] = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
 static const uint32_t PALETTE_DARK[7] = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
+static const uint32_t THEME_LIGHT[THEMES][4] = {{0xFF1A73E8, 0xFFD2E3FC, 0xFFAECBFA, 0xFFEEF3FC}, {0xFF188038, 0xFFCEEAD6, 0xFFA8DAB5, 0xFFEEF7F0},
+    {0xFF8430CE, 0xFFE9D2FD, 0xFFD7AEFB, 0xFFF6EEFC}, {0xFF00796B, 0xFFC8EBE7, 0xFF9ED9D1, 0xFFEDF7F6}};
+static const uint32_t THEME_DARK[THEMES][4] = {{0xFF8AB4F8, 0xFF2B3A55, 0xFF3B5A8A, 0xFF1E2430}, {0xFF81C995, 0xFF24402E, 0xFF2F5E3F, 0xFF1C2620},
+    {0xFFC58AF9, 0xFF3A2B55, 0xFF553B8A, 0xFF241E30}, {0xFF6FD3C6, 0xFF1F4541, 0xFF2A615B, 0xFF1A2726}};
+static NSString *const SUPPORTER_PRODUCT = @"com.baresudoku.supporter";
+static NSString *const TIP_PRODUCTS[TIPS] = {@"com.baresudoku.tip.small", @"com.baresudoku.tip.medium", @"com.baresudoku.tip.large"};
+static NSString *const TIP_HEARTS[TIPS] = {@"\u2665", @"\u2665\u2665", @"\u2665\u2665\u2665"};
+static NSString *const ARCHIVE_FIRST = @"2025-01-01";
 
 static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", @"Erase", @"Notes", @"Fill notes", @"Hint",
     @"New game", @"Show mistakes", @"On", @"Off", @"Cancel", @"Solved!", @"Preparing…", @"This digit is wrong",
@@ -29,7 +38,11 @@ static NSString *const EN[] = {@"Easy", @"Medium", @"Hard", @"Expert", @"Undo", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Master",
     @"Daily Sudoku", @"Share", @"Play Sudoku", @"Statistics", @"Solved", @"Best time", @"Average time", @"Daily streak",
-    @"Explain", @"Show timer", @"Color", @"Corner", @"★ Rate Bare Sudoku"};
+    @"Explain", @"Show timer", @"Color", @"Corner", @"★ Rate Bare Sudoku", @"\u2665 Support Bare Sudoku", @"\u2665 Supporter",
+    @"Bare Sudoku stays free, with no ads.", @"Supporters get color themes and the daily archive.", @"Become a supporter",
+    @"Tip", @"Restore purchases", @"Thank you for your support!", @"Waiting for the App Store\u2026", @"Purchase failed",
+    @"App Store is not available", @"No purchases to restore", @"Theme", @"Blue", @"Green", @"Purple", @"Teal",
+    @"\u2039 Previous day", @"Next day \u203a"};
 static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", @"Sil", @"Not", @"Notları doldur", @"İpucu",
     @"Yeni oyun", @"Yanlışları göster", @"Açık", @"Kapalı", @"Vazgeç", @"Tebrikler!", @"Hazırlanıyor…", @"Bu rakam yanlış",
     @"Bu hücrede tek aday: #", @"Bu satırda # için tek yer", @"Bu sütunda # için tek yer",
@@ -44,7 +57,11 @@ static NSString *const TR[] = {@"Kolay", @"Orta", @"Zor", @"Uzman", @"Geri al", 
     @"Nishio Forcing Chain", @"Cell Forcing Chain", @"Unit Forcing Chain", @"Dynamic Forcing Net",
     @"Nested Forcing Net", @"Sashimi X-Wing", @"Sashimi Swordfish", @"Sashimi Jellyfish", @"Usta",
     @"Günlük Sudoku", @"Paylaş", @"Sudoku oyna", @"İstatistik", @"Çözülen", @"En iyi süre", @"Ortalama süre", @"Günlük seri",
-    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"★ Bare Sudoku'yu değerlendir"};
+    @"Açıkla", @"Zamanlayıcıyı göster", @"Renk", @"Köşe", @"★ Bare Sudoku'yu değerlendir", @"\u2665 Bare Sudoku'ya destek ol", @"\u2665 Destekçi",
+    @"Bare Sudoku ücretsiz ve reklamsız kalır.", @"Destekçilere renk temaları ve günlük arşiv açılır.", @"Destekçi ol",
+    @"Bahşiş", @"Satın alımları geri yükle", @"Desteğin için teşekkürler!", @"App Store bekleniyor\u2026", @"Satın alma tamamlanamadı",
+    @"App Store'a ulaşılamıyor", @"Geri yüklenecek satın alma yok", @"Tema", @"Mavi", @"Yeşil", @"Mor", @"Turkuaz",
+    @"\u2039 Önceki gün", @"Sonraki gün \u203a"};
 static NSString *const DIGITS[] = {@"", @"1", @"2", @"3", @"4", @"5", @"6", @"7", @"8", @"9"};
 
 static Game game;
@@ -54,6 +71,10 @@ static NSString *dailyDate = @"";
 static BOOL dailyMenu;
 static BOOL showTimer = YES;
 static BOOL recorded;
+static BOOL supporter;
+static int theme;
+static NSString *dailyDay = @"";
+static BOOL dailyArchive;
 static NSString *const SITE = @"https://baresudoku.com/";
 
 static int64_t nowMs(void) {
@@ -67,6 +88,7 @@ static void saveGame(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setObject:[NSString stringWithUTF8String:encoded] forKey:@"g"];
     [defaults setObject:dailyDate forKey:@"dd"];
+    [defaults setBool:dailyArchive forKey:@"da"];
     free(encoded);
 }
 
@@ -85,6 +107,10 @@ static NSDate *dateOf(NSString *day) {
     c.month = [day substringWithRange:NSMakeRange(5, 2)].integerValue;
     c.day = [day substringWithRange:NSMakeRange(8, 2)].integerValue;
     return [[NSCalendar currentCalendar] dateFromComponents:c];
+}
+
+static NSString *shiftDay(NSString *day, int days) {
+    return dateKey([[NSCalendar currentCalendar] dateByAddingUnit:NSCalendarUnitDay value:days toDate:dateOf(day) options:0]);
 }
 
 static int dailySeed(NSString *day, int level) {
@@ -110,29 +136,33 @@ static void recordStart(int level) {
     storeStats(a);
 }
 
-static NSMutableArray *dailyLog(void) {
+static NSMutableArray *dayLog(NSString *key) {
     NSMutableArray *days = [NSMutableArray array];
-    for (NSString *day in [([[NSUserDefaults standardUserDefaults] stringForKey:@"dl"] ?: @"") componentsSeparatedByString:@";"]) if (day.length == 10) [days addObject:day];
+    for (NSString *day in [([[NSUserDefaults standardUserDefaults] stringForKey:key] ?: @"") componentsSeparatedByString:@";"]) if (day.length == 10) [days addObject:day];
     return days;
 }
 
-static void logDaily(NSString *day) {
-    NSMutableArray *days = dailyLog();
+static void logDay(NSString *key, NSString *day) {
+    NSMutableArray *days = dayLog(key);
     if ([days containsObject:day]) return;
     [days addObject:day];
     [days sortUsingSelector:@selector(compare:)];
-    while (days.count > 400) [days removeObjectAtIndex:0];
-    [[NSUserDefaults standardUserDefaults] setObject:[days componentsJoinedByString:@";"] forKey:@"dl"];
+    while (days.count > 800) [days removeObjectAtIndex:0];
+    [[NSUserDefaults standardUserDefaults] setObject:[days componentsJoinedByString:@";"] forKey:key];
 }
 
-static void recordSolved(int level, int seconds, NSString *day) {
+static BOOL daySolved(NSString *day) {
+    return [dayLog(@"dl") containsObject:day] || [dayLog(@"dx") containsObject:day];
+}
+
+static void recordSolved(int level, int seconds, NSString *day, BOOL archive) {
     int a[SUDOKU_LEVELS * 4];
     loadStats(a);
     a[level * 4 + 1]++;
     a[level * 4 + 2] += seconds;
     if (a[level * 4 + 3] == 0 || seconds < a[level * 4 + 3]) a[level * 4 + 3] = seconds;
     storeStats(a);
-    if (day.length) logDaily(day);
+    if (day.length) logDay(archive ? @"dx" : @"dl", day);
 }
 
 static const int REVIEW_EVERY = 2;
@@ -146,7 +176,7 @@ static BOOL reviewDue(int solvedTotal) {
 }
 
 static int dailyStreak(void) {
-    NSArray *days = dailyLog();
+    NSArray *days = dayLog(@"dl");
     NSCalendar *calendar = [NSCalendar currentCalendar];
     NSDate *date = [NSDate date];
     if (![days containsObject:dateKey(date)]) date = [calendar dateByAddingUnit:NSCalendarUnitDay value:-1 toDate:date options:0];
@@ -224,7 +254,9 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
     int menuItems[MENU_MAX][2], menuItemCount[MENU_MAX];
     CGFloat statsX, statsW, statsTop, statsRowH;
     int statsLines;
-    int cursor, menuCursor;
+    BOOL supportOpen;
+    CGFloat supportX, supportW, supportTop, supportRowH;
+    int cursor, menuCursor, supportCursor;
     NSMutableDictionary *axElements;
     NSString *axLastMessage;
 #ifdef SELFTEST
@@ -236,9 +268,105 @@ static void strokeSetup(CGContextRef c, UIColor *color, CGFloat width) {
 - (void)shown;
 - (void)hidden;
 - (void)focusChanged:(BOOL)focused;
+- (void)storeChanged;
 @end
 
 static BoardView *current;
+
+@interface Store : NSObject <SKProductsRequestDelegate, SKPaymentTransactionObserver>
+@end
+
+static Store *store;
+static NSMutableDictionary<NSString *, SKProduct *> *products;
+static SKProductsRequest *productsRequest;
+static BOOL productsAsked;
+static int storeStatus;
+
+static void unlockSupporter(void) {
+    supporter = YES;
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"sp"];
+}
+
+@implementation Store
+- (void)load {
+    if (productsRequest || products.count > 0) return;
+    productsAsked = YES;
+    NSMutableSet *ids = [NSMutableSet setWithObject:SUPPORTER_PRODUCT];
+    for (int i = 0; i < TIPS; i++) [ids addObject:TIP_PRODUCTS[i]];
+    productsRequest = [[SKProductsRequest alloc] initWithProductIdentifiers:ids];
+    productsRequest.delegate = self;
+    [productsRequest start];
+}
+
+- (void)productsRequest:(SKProductsRequest *)request didReceiveResponse:(SKProductsResponse *)response {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        for (SKProduct *product in response.products) products[product.productIdentifier] = product;
+        productsRequest = nil;
+        [current storeChanged];
+    });
+}
+
+- (void)request:(SKRequest *)request didFailWithError:(NSError *)error {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        productsRequest = nil;
+        [current storeChanged];
+    });
+}
+
+- (void)buy:(NSString *)identifier {
+    SKProduct *product = products[identifier];
+    if (!product || ![SKPaymentQueue canMakePayments]) {
+        storeStatus = S_STORE_OFF;
+        [self load];
+    } else {
+        storeStatus = S_STORE_WAIT;
+        [[SKPaymentQueue defaultQueue] addPayment:[SKPayment paymentWithProduct:product]];
+    }
+    [current storeChanged];
+}
+
+- (void)restore {
+    storeStatus = S_STORE_WAIT;
+    [[SKPaymentQueue defaultQueue] restoreCompletedTransactions];
+    [current storeChanged];
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue updatedTransactions:(NSArray<SKPaymentTransaction *> *)transactions {
+    for (SKPaymentTransaction *transaction in transactions) {
+        SKPaymentTransactionState state = transaction.transactionState;
+        if (state == SKPaymentTransactionStatePurchased || state == SKPaymentTransactionStateRestored) {
+            if ([transaction.payment.productIdentifier isEqualToString:SUPPORTER_PRODUCT]) unlockSupporter();
+            storeStatus = S_THANKS;
+            [queue finishTransaction:transaction];
+        } else if (state == SKPaymentTransactionStateFailed) {
+            storeStatus = transaction.error.code == SKErrorPaymentCancelled ? 0 : S_STORE_FAIL;
+            [queue finishTransaction:transaction];
+        } else if (state == SKPaymentTransactionStateDeferred) {
+            storeStatus = S_STORE_WAIT;
+        }
+    }
+    [current storeChanged];
+}
+
+- (void)paymentQueueRestoreCompletedTransactionsFinished:(SKPaymentQueue *)queue {
+    if (storeStatus == S_STORE_WAIT) storeStatus = supporter ? S_THANKS : S_NOTHING;
+    [current storeChanged];
+}
+
+- (void)paymentQueue:(SKPaymentQueue *)queue restoreCompletedTransactionsFailedWithError:(NSError *)error {
+    storeStatus = error.code == SKErrorPaymentCancelled ? 0 : S_STORE_FAIL;
+    [current storeChanged];
+}
+@end
+
+static NSString *priceOf(NSString *identifier) {
+    SKProduct *product = products[identifier];
+    if (!product) return nil;
+    NSNumberFormatter *formatter = [NSNumberFormatter new];
+    formatter.numberStyle = NSNumberFormatterCurrencyStyle;
+    formatter.locale = product.priceLocale;
+    return [formatter stringFromNumber:product.price];
+}
 
 @interface BoardElement : UIAccessibilityElement
 @property (nonatomic) int target;
@@ -281,17 +409,18 @@ static BoardView *current;
     dark = self.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     if (dark) {
         cBg = rgb(0xFF121212); cLine = rgb(0xFF3A3A3A); cThick = rgb(0xFFB0B0B0); cGiven = rgb(0xFFF0F0F0);
-        cEntered = rgb(0xFF8AB4F8); cWrong = rgb(0xFFF28B82); cNote = rgb(0xFFA0A0A0); cUnit = rgb(0xFF1E2430);
-        cSame = rgb(0xFF2B3A55); cSelected = rgb(0xFF3B5A8A); cKey = rgb(0xFF1F1F1F); cKeyText = rgb(0xFFF0F0F0);
-        cMuted = rgb(0xFF707070); cPanel = rgb(0xFF1F1F1F); cDim = rgb(0x99000000); cAccent = rgb(0xFF8AB4F8);
-        cCorner = rgb(0xFFFFAB70);
+        cWrong = rgb(0xFFF28B82); cNote = rgb(0xFFA0A0A0); cKey = rgb(0xFF1F1F1F); cKeyText = rgb(0xFFF0F0F0);
+        cMuted = rgb(0xFF707070); cPanel = rgb(0xFF1F1F1F); cDim = rgb(0x99000000); cCorner = rgb(0xFFFFAB70);
     } else {
         cBg = rgb(0xFFFFFFFF); cLine = rgb(0xFFD0D0D0); cThick = rgb(0xFF303030); cGiven = rgb(0xFF202124);
-        cEntered = rgb(0xFF1A73E8); cWrong = rgb(0xFFD93025); cNote = rgb(0xFF5F6368); cUnit = rgb(0xFFEEF3FC);
-        cSame = rgb(0xFFD2E3FC); cSelected = rgb(0xFFAECBFA); cKey = rgb(0xFFF1F3F4); cKeyText = rgb(0xFF202124);
-        cMuted = rgb(0xFF9AA0A6); cPanel = rgb(0xFFFFFFFF); cDim = rgb(0x66000000); cAccent = rgb(0xFF1A73E8);
-        cCorner = rgb(0xFFC2410C);
+        cWrong = rgb(0xFFD93025); cNote = rgb(0xFF5F6368); cKey = rgb(0xFFF1F3F4); cKeyText = rgb(0xFF202124);
+        cMuted = rgb(0xFF9AA0A6); cPanel = rgb(0xFFFFFFFF); cDim = rgb(0x66000000); cCorner = rgb(0xFFC2410C);
     }
+    const uint32_t *tone = dark ? THEME_DARK[supporter ? theme : 0] : THEME_LIGHT[supporter ? theme : 0];
+    cEntered = cAccent = rgb(tone[0]);
+    cSame = rgb(tone[1]);
+    cSelected = rgb(tone[2]);
+    cUnit = rgb(tone[3]);
     for (int k = 1; k <= GAME_COLORS; k++) palette[k] = rgb(dark ? PALETTE_DARK[k] : PALETTE_LIGHT[k]);
     self.backgroundColor = cBg;
 }
@@ -396,6 +525,7 @@ static BoardView *current;
 #endif
     if ([self overlay]) {
         if (statsOpen) [self drawStats];
+        else if (supportOpen) [self drawSupport];
         else [self drawMenu];
     }
 }
@@ -517,7 +647,7 @@ static BoardView *current;
 - (void)downAt:(CGPoint)p {
     [self input];
     if ([self overlay]) {
-        downTarget = statsOpen ? [self statsTargetAt:p] : [self menuTargetAt:p];
+        downTarget = statsOpen ? [self statsTargetAt:p] : supportOpen ? [self supportTargetAt:p] : [self menuTargetAt:p];
         return;
     }
     if (pendingLevel >= 0) return;
@@ -540,9 +670,10 @@ static BoardView *current;
 
 - (void)upAt:(CGPoint)p {
     if ([self overlay]) {
-        int t = statsOpen ? [self statsTargetAt:p] : [self menuTargetAt:p];
+        int t = statsOpen ? [self statsTargetAt:p] : supportOpen ? [self supportTargetAt:p] : [self menuTargetAt:p];
         if (t == downTarget) {
             if (statsOpen) [self closeStats];
+            else if (supportOpen) [self supportAction:downTarget];
             else [self menuAction:downTarget];
         }
         downTarget = -1;
@@ -593,7 +724,7 @@ static BoardView *current;
         [self stopTimer];
         if (!recorded) {
             recorded = YES;
-            recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate);
+            recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate, dailyArchive);
             [self requestReviewIfDue];
         }
     }
@@ -807,9 +938,11 @@ static BoardView *current;
     BOOL solved = game.active && game.solved;
     int n = 0;
     if (solved && [self canShare]) { menuItems[n][0] = 412; menuItemCount[n++] = 1; }
+    if (dailyMenu && !solved && supporter) { menuItems[n][0] = 415; menuItems[n][1] = 416; menuItemCount[n++] = 2; }
     for (int level = 0; level < 5; level++) { menuItems[n][0] = 400 + level; menuItemCount[n++] = 1; }
     menuItems[n][0] = 405; menuItems[n][1] = 408; menuItemCount[n++] = 2;
     menuItems[n][0] = 409; menuItems[n][1] = 411; menuItemCount[n++] = 2;
+    menuItems[n][0] = 413; menuItemCount[n++] = 1;
     if ([self cancellable]) {
         menuItems[n][0] = 406; menuItemCount[n++] = 1;
         menuItems[n][0] = 407; menuItemCount[n++] = 1;
@@ -877,7 +1010,11 @@ static BoardView *current;
     NSMutableArray *lines = [NSMutableArray array];
     [lines addObject:text[solved ? S_SOLVED : dailyMenu ? S_DAILY : S_TITLE]];
     if (solved) [lines addObject:[NSString stringWithFormat:@"%@  %@", [self levelText], [self clockString:game_time(&game, 0)]]];
-    if (solved ? dailyDate.length > 0 : dailyMenu) [lines addObject:[self dateText:solved ? dailyDate : todayKey()]];
+    if (solved) {
+        if (dailyDate.length) [lines addObject:[self dateText:dailyDate]];
+    } else if (dailyMenu) {
+        [lines addObject:daySolved(dailyDay) ? [NSString stringWithFormat:@"%@ \u2713", [self dateText:dailyDay]] : [self dateText:dailyDay]];
+    }
     [lines addObject:text[S_NEW]];
     return lines;
 }
@@ -904,7 +1041,7 @@ static BoardView *current;
             CGRect r = [self menuItemRect:row item:item];
             NSString *label = [self menuLabel:menuItems[row][item]];
             fillRect(r.origin.x, r.origin.y + inset, CGRectGetMaxX(r), CGRectGetMaxY(r) - inset, cKey, menuRowH * 0.25);
-            drawText(label, CGRectGetMidX(r), CGRectGetMidY(r), fit(label, menuRowH * 0.4, r.size.width * 0.9), cKeyText, 0);
+            drawText(label, CGRectGetMidX(r), CGRectGetMidY(r), fit(label, menuRowH * 0.4, r.size.width * 0.9), [self menuEnabled:menuItems[row][item]] ? cKeyText : cMuted, 0);
         }
     }
 #if TARGET_OS_TV
@@ -936,6 +1073,7 @@ static BoardView *current;
         [self setNeedsDisplay];
     } else if (t == 409) {
         dailyMenu = !dailyMenu;
+        dailyDay = todayKey();
         [self setNeedsDisplay];
         UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
     } else if (t == 411) {
@@ -944,6 +1082,12 @@ static BoardView *current;
         UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
     } else if (t == 412 && game.active && game.solved) {
         [self share];
+    } else if (t == 413) {
+        [self openSupport];
+    } else if ((t == 415 || t == 416) && supporter && [self menuEnabled:t]) {
+        dailyDay = shiftDay(dailyDay, t == 415 ? -1 : 1);
+        [self setNeedsDisplay];
+        UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, nil);
     } else if (t == 406 && [self cancellable]) {
         game_restart(&game);
         saveGame();
@@ -955,7 +1099,7 @@ static BoardView *current;
 
 - (NSString *)shareText {
     NSString *result = [NSString stringWithFormat:@"%@ \u00b7 %@", [self levelText], [self clockString:game_time(&game, 0)]];
-    if (dailyDate.length) return [NSString stringWithFormat:@"%@ %@ \u00b7 %@\n%@%@daily/", text[S_DAILY], [self dateText:dailyDate], result, SITE, [self langPath]];
+    if (dailyDate.length) return [NSString stringWithFormat:@"%@ %@ \u00b7 %@\n%@%@daily/%@", text[S_DAILY], [self dateText:dailyDate], result, SITE, [self langPath], dailyArchive ? [@"?d=" stringByAppendingString:dailyDate] : @""];
     return [NSString stringWithFormat:@"%@ \u00b7 %@\n%@%@?p=%@", text[S_TITLE], result, SITE, [self langPath], digitString(game.given)];
 }
 
@@ -1066,12 +1210,138 @@ static BoardView *current;
     UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
 }
 
+- (BOOL)menuEnabled:(int)target {
+    if (target == 415) return [dailyDay compare:ARCHIVE_FIRST] == NSOrderedDescending;
+    if (target == 416) return [dailyDay compare:todayKey()] == NSOrderedAscending;
+    return YES;
+}
+
+- (void)openSupport {
+    supportOpen = YES;
+    supportCursor = 0;
+    storeStatus = 0;
+    [store load];
+    [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+}
+
+- (void)closeSupport {
+    supportOpen = NO;
+    storeStatus = 0;
+    [self setNeedsDisplay];
+    UIAccessibilityPostNotification(UIAccessibilityScreenChangedNotification, nil);
+}
+
+- (void)storeChanged {
+    [self applyTheme];
+    [self setNeedsDisplay];
+    NSString *status = supportOpen ? [self supportStatus] : nil;
+    if (status && ![status isEqualToString:axLastMessage]) UIAccessibilityPostNotification(UIAccessibilityAnnouncementNotification, status);
+    if (status) axLastMessage = status;
+    UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, nil);
+}
+
+- (void)layoutSupport {
+    CGFloat w = self.bounds.size.width, h = self.bounds.size.height;
+    CGFloat base = MIN(w - insetL - insetR, h - insetT - insetB);
+    supportW = base * 0.9;
+    supportRowH = MIN(base * 0.095, (h - insetT - insetB) * 0.94 / 8);
+    supportX = insetL + (w - insetL - insetR - supportW) / 2;
+    supportTop = insetT + (h - insetT - insetB - supportRowH * 8) / 2;
+}
+
+- (CGRect)supportRect:(int)target {
+    CGFloat side = supportRowH * 0.4, gap = supportRowH * 0.12, full = supportW - 2 * side;
+    if (target >= 442 && target < 442 + TIPS) {
+        CGFloat w = (full - gap * (TIPS - 1)) / TIPS;
+        return CGRectMake(supportX + side + (target - 442) * (w + gap), supportTop + supportRowH * 3.8, w, supportRowH);
+    }
+    CGFloat row = target == 441 ? 2.8 : target == 445 ? 4.8 : 6.6;
+    return CGRectMake(supportX + side, supportTop + supportRowH * row, full, supportRowH);
+}
+
+- (NSArray *)supportTargets {
+    return @[@441, @442, @443, @444, @445, @446];
+}
+
+- (NSString *)supportLabel:(int)target spoken:(BOOL)spoken {
+    if (target == 441) {
+        NSString *price = priceOf(SUPPORTER_PRODUCT);
+        if (supporter) return [NSString stringWithFormat:@"%@: %@", text[S_THEME], text[S_THEME_NAME + theme]];
+        return price ? [NSString stringWithFormat:@"%@ \u00b7 %@", text[S_BECOME], price] : text[S_BECOME];
+    }
+    if (target >= 442 && target < 442 + TIPS) {
+        int i = target - 442;
+        NSString *price = priceOf(TIP_PRODUCTS[i]);
+        if (spoken) return price ? [NSString stringWithFormat:@"%@, %@", text[S_TIP], price] : [NSString stringWithFormat:@"%@ %d", text[S_TIP], i + 1];
+        return price ? [NSString stringWithFormat:@"%@ %@", TIP_HEARTS[i], price] : TIP_HEARTS[i];
+    }
+    return text[target == 445 ? S_RESTORE : S_CANCEL];
+}
+
+- (NSString *)supportStatus {
+    if (storeStatus) return text[storeStatus];
+    if (productsRequest) return text[S_STORE_WAIT];
+    if (productsAsked && products.count == 0) return text[S_STORE_OFF];
+    return nil;
+}
+
+- (void)drawSupport {
+    [cDim setFill];
+    UIRectFillUsingBlendMode(self.bounds, kCGBlendModeNormal);
+    [self layoutSupport];
+    CGFloat h = supportRowH;
+    fillRect(supportX, supportTop, supportX + supportW, supportTop + h * 8, cPanel, h * 0.3);
+    CGFloat cx = supportX + supportW / 2;
+    NSString *title = text[supporter ? S_SUPPORTER : S_SUPPORT];
+    drawText(title, cx, supportTop + h * 0.75, fit(title, h * 0.5, supportW * 0.9), cKeyText, 1);
+    drawText(text[S_SUPPORT_FREE], cx, supportTop + h * 1.75, fit(text[S_SUPPORT_FREE], h * 0.34, supportW * 0.9), cMuted, 0);
+    drawText(text[S_SUPPORT_PERKS], cx, supportTop + h * 2.3, fit(text[S_SUPPORT_PERKS], h * 0.34, supportW * 0.9), cMuted, 0);
+    CGFloat inset = h * 0.08;
+    for (int target = 441; target <= 446; target++) {
+        CGRect r = [self supportRect:target];
+        BOOL buy = target == 441 && !supporter;
+        fillRect(r.origin.x, r.origin.y + inset, CGRectGetMaxX(r), CGRectGetMaxY(r) - inset, buy ? cAccent : cKey, h * 0.25);
+        NSString *label = [self supportLabel:target spoken:NO];
+        drawText(label, CGRectGetMidX(r), CGRectGetMidY(r), fit(label, h * 0.4, r.size.width * 0.9), buy ? cBg : cKeyText, buy ? 1 : 0);
+    }
+    NSString *status = [self supportStatus];
+    if (status) drawText(status, cx, supportTop + h * 6.2, fit(status, h * 0.34, supportW * 0.9), storeStatus == S_THANKS ? cAccent : cMuted, 0);
+#if TARGET_OS_TV
+    NSArray *targets = [self supportTargets];
+    supportCursor = MAX(0, MIN((int)targets.count - 1, supportCursor));
+    [self drawRing:CGRectInset([self supportRect:[targets[supportCursor] intValue]], 0, inset)];
+#endif
+}
+
+- (int)supportTargetAt:(CGPoint)p {
+    [self layoutSupport];
+    if (p.x < supportX || p.x > supportX + supportW || p.y < supportTop || p.y > supportTop + supportRowH * 8) return 446;
+    for (NSNumber *number in [self supportTargets]) if (CGRectContainsPoint([self supportRect:number.intValue], p)) return number.intValue;
+    return 440;
+}
+
+- (void)supportAction:(int)t {
+    if (t == 441 && supporter) {
+        theme = (theme + 1) % THEMES;
+        [[NSUserDefaults standardUserDefaults] setInteger:theme forKey:@"th"];
+        [self applyTheme];
+        [self setNeedsDisplay];
+        UIAccessibilityPostNotification(UIAccessibilityLayoutChangedNotification, nil);
+    } else if (t == 441) [store buy:SUPPORTER_PRODUCT];
+    else if (t >= 442 && t < 442 + TIPS) [store buy:TIP_PRODUCTS[t - 442]];
+    else if (t == 445) [store restore];
+    else if (t == 446) [self closeSupport];
+}
+
 - (void)startGame:(int)level {
     if (pendingLevel >= 0) return;
     menuOpen = NO;
     statsOpen = NO;
+    supportOpen = NO;
     idle = NO;
-    NSString *day = dailyMenu ? todayKey() : @"";
+    NSString *day = dailyMenu ? dailyDay : @"";
+    BOOL archive = day.length > 0 && ![day isEqualToString:todayKey()];
     game_pause(&game, nowMs());
     [self stopTimer];
     wasGenerating = YES;
@@ -1090,6 +1360,7 @@ static BoardView *current;
             free(puzzle);
             free(worker);
             dailyDate = day;
+            dailyArchive = archive;
             recorded = NO;
             recordStart(level);
             saveGame();
@@ -1112,6 +1383,7 @@ static BoardView *current;
 - (void)closeMenu {
     menuOpen = NO;
     statsOpen = NO;
+    supportOpen = NO;
     idle = NO;
     lastInput = nowMs();
     [self resumeIfAllowed];
@@ -1170,6 +1442,11 @@ static BoardView *current;
     if (pendingLevel >= 0) return;
     if ([self overlay]) {
         if (statsOpen) return;
+        if (supportOpen) {
+            supportCursor = MAX(0, MIN((int)[self supportTargets].count - 1, supportCursor + (dir == 0 || dir == 2 ? -1 : 1)));
+            [self setNeedsDisplay];
+            return;
+        }
         [self layoutMenu];
         menuCursor = MAX(0, MIN([self menuFlatCount] - 1, menuCursor + (dir == 0 || dir == 2 ? -1 : 1)));
     } else {
@@ -1225,6 +1502,13 @@ static BoardView *current;
                 return YES;
             }
             return dir >= 0;
+        }
+        if (supportOpen) {
+            if (dir >= 0) [self moveCursor:dir];
+            else if (select) [self supportAction:[[self supportTargets][MIN(supportCursor, (int)[self supportTargets].count - 1)] intValue]];
+            else if (menu || escape || play) [self closeSupport];
+            else return NO;
+            return YES;
         }
         if (dir >= 0) {
             [self moveCursor:dir];
@@ -1302,6 +1586,8 @@ static BoardView *current;
     if (target == 409) return text[dailyMenu ? S_PLAY : S_DAILY];
     if (target == 411) return text[S_STATS];
     if (target == 412) return text[S_SHARE];
+    if (target == 413) return text[supporter ? S_SUPPORTER : S_SUPPORT];
+    if (target == 415 || target == 416) return text[target == 415 ? S_PREV_DAY : S_NEXT_DAY];
     return text[target == 406 ? S_RESTART : S_CANCEL];
 }
 
@@ -1360,12 +1646,24 @@ static BoardView *current;
             [list addObject:[self axElement:431 frame:close label:text[S_CANCEL] value:nil traits:UIAccessibilityTraitButton]];
             return list;
         }
+        if (supportOpen) {
+            [self layoutSupport];
+            NSString *info = [NSString stringWithFormat:@"%@. %@. %@", text[supporter ? S_SUPPORTER : S_SUPPORT], text[S_SUPPORT_FREE], text[S_SUPPORT_PERKS]];
+            [list addObject:[self axElement:440 frame:CGRectMake(supportX, supportTop, supportW, supportRowH * 2.6) label:info value:nil traits:UIAccessibilityTraitHeader]];
+            for (NSNumber *number in [self supportTargets]) {
+                int target = number.intValue;
+                [list addObject:[self axElement:target frame:[self supportRect:target] label:[self supportLabel:target spoken:YES] value:nil traits:UIAccessibilityTraitButton]];
+            }
+            NSString *status = [self supportStatus];
+            if (status) [list addObject:[self axElement:447 frame:CGRectMake(supportX, supportTop + supportRowH * 5.8, supportW, supportRowH * 0.8) label:status value:nil traits:UIAccessibilityTraitStaticText | UIAccessibilityTraitUpdatesFrequently]];
+            return list;
+        }
         [self layoutMenu];
         [list addObject:[self axElement:410 frame:CGRectMake(menuX, menuTop, menuW, menuTitleH) label:[[self titleTexts] componentsJoinedByString:@". "] value:nil traits:UIAccessibilityTraitHeader]];
         for (int row = 0; row < menuRows; row++) {
             for (int item = 0; item < menuItemCount[row]; item++) {
                 int target = menuItems[row][item];
-                [list addObject:[self axElement:target frame:[self menuItemRect:row item:item] label:[self menuLabel:target] value:nil traits:UIAccessibilityTraitButton]];
+                [list addObject:[self axElement:target frame:[self menuItemRect:row item:item] label:[self menuLabel:target] value:nil traits:[self menuEnabled:target] ? UIAccessibilityTraitButton : UIAccessibilityTraitButton | UIAccessibilityTraitNotEnabled]];
             }
         }
         return list;
@@ -1419,6 +1717,8 @@ static BoardView *current;
     if ([self overlay]) {
         if (statsOpen) {
             if (t == 431) [self closeStats];
+        } else if (supportOpen) {
+            if (t > 440 && t < 447) [self supportAction:t];
         } else if (t >= 400 && t != 410 && t != 420) [self menuAction:t];
         return;
     }
@@ -1588,6 +1888,13 @@ static BoardView *current;
     dailyDate = game.active ? ([defaults stringForKey:@"dd"] ?: @"") : @"";
     dailyMenu = dailyDate.length > 0;
     showTimer = ![[defaults stringForKey:@"t"] isEqualToString:@"0"];
+    supporter = [defaults boolForKey:@"sp"];
+    theme = MAX(0, MIN(THEMES - 1, (int)[defaults integerForKey:@"th"]));
+    dailyArchive = game.active && [defaults boolForKey:@"da"];
+    dailyDay = dailyDate.length ? dailyDate : todayKey();
+    products = [NSMutableDictionary dictionary];
+    store = [Store new];
+    [[SKPaymentQueue defaultQueue] addTransactionObserver:store];
     recorded = game.solved;
     if (game.active) game.rating = sudoku_rate(&engine, game.given);
     [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidResignKeyNotification object:nil queue:nil usingBlock:^(NSNotification *note) { [current focusChanged:NO]; }];
