@@ -853,7 +853,7 @@ static NSString *priceOf(NSString *identifier) {
         if (!recorded) {
             recorded = YES;
             if (!variant) recordSolved(game.level, (int)(game_time(&game, now) / 1000), dailyDate, dailyArchive);
-            [self requestReviewIfDue];
+            if (![self requestReviewIfDue]) [self offerSupportSoon];
         }
     }
     if (changed) saveGame();
@@ -1283,18 +1283,28 @@ static NSString *priceOf(NSString *identifier) {
 #endif
 }
 
-- (void)requestReviewIfDue {
-#if !TARGET_OS_TV
+- (BOOL)requestReviewIfDue {
+#if TARGET_OS_TV
+    return NO;
+#else
     int a[SUDOKU_LEVELS * 4];
     loadStats(a);
     int total = 0;
     for (int level = 0; level < SUDOKU_LEVELS; level++) total += a[level * 4 + 1];
-    if (!reviewDue(total)) return;
+    if (!reviewDue(total)) return NO;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         UIWindowScene *scene = self.window.windowScene;
         if (scene) [SKStoreReviewController requestReviewInScene:scene];
     });
+    return YES;
 #endif
+}
+
+- (void)offerSupportSoon {
+    if (supporter) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!supporter && game.active && game.solved && pendingLevel < 0 && !statsOpen && !supportOpen) [self openSupport];
+    });
 }
 
 - (void)layoutStats {
