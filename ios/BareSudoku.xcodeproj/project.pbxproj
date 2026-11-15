@@ -13,6 +13,8 @@
 		BA000006 /* Sudoku.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000012 /* Sudoku.c */; };
 		BA000007 /* Game.c in Sources */ = {isa = PBXBuildFile; fileRef = BA000013 /* Game.c */; };
 		BA000008 /* Assets-tv.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA00001A /* Assets-tv.xcassets */; };
+		BA000009 /* Variant.c in Sources */ = {isa = PBXBuildFile; fileRef = BA00001C /* Variant.c */; };
+		BA00000A /* Variant.c in Sources */ = {isa = PBXBuildFile; fileRef = BA00001C /* Variant.c */; };
 		BA000010 /* BareSudoku.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BareSudoku.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA000011 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		BA000012 /* Sudoku.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Sudoku.c; sourceTree = "<group>"; };
@@ -25,6 +27,8 @@
 		BA000019 /* BareSudokuTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BareSudokuTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA00001A /* Assets-tv.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets-tv.xcassets"; sourceTree = "<group>"; };
 		BA00001B /* Info-tv.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-tv.plist"; sourceTree = "<group>"; };
+		BA00001C /* Variant.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = Variant.c; sourceTree = "<group>"; };
+		BA00001D /* Variant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Variant.h; sourceTree = "<group>"; };
 		BA000020 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -39,6 +43,7 @@
 				BA000001 /* main.m in Sources */,
 				BA000002 /* Sudoku.c in Sources */,
 				BA000003 /* Game.c in Sources */,
+				BA000009 /* Variant.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -57,6 +62,7 @@
 				BA000005 /* main.m in Sources */,
 				BA000006 /* Sudoku.c in Sources */,
 				BA000007 /* Game.c in Sources */,
+				BA00000A /* Variant.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +89,8 @@
 				BA000014 /* Sudoku.h */,
 				BA000013 /* Game.c */,
 				BA000015 /* Game.h */,
+				BA00001C /* Variant.c */,
+				BA00001D /* Variant.h */,
 				BA000016 /* Assets.xcassets */,
 				BA000017 /* Info.plist */,
 				BA000018 /* Mac.entitlements */,
