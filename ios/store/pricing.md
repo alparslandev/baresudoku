@@ -48,6 +48,6 @@ Soru: iOS (ve aynı kayıttaki macOS, tvOS, visionOS) tek seferlik X dolara sat�
 ## Karar (2026-11-16)
 - Ücretli uygulamaya geçilmedi: iOS 2 bin indirmeyi aştı, mevcut kullanıcı ücretli modelde hiç ödemez.
 - Uygulama ücretsiz ve reklamsız kalır; iOS'a bahşiş ve tek seferlik Destekçi satın alımı eklendi. Web ve Android değişmedi.
-- Ürünler: `com.baresudoku.supporter` (tüketilmeyen; renk temaları ve 2025-01-01'den başlayan günlük arşiv), `com.baresudoku.tip.small`, `com.baresudoku.tip.medium`, `com.baresudoku.tip.large` (tüketilen bahşiş).
+- Ürünler: `com.baresudoku.supporter` (tüketilmeyen; Killer, Diagonal ve Mini 6x6 varyantları, renk temaları ve 2025-01-01'den başlayan günlük arşiv), `com.baresudoku.tip.small`, `com.baresudoku.tip.medium`, `com.baresudoku.tip.large` (tüketilen bahşiş).
 - Satın almayan oyuncu için tek değişiklik menüdeki "♥ Destek ol" satırı; açılır pencere ya da hatırlatma yok.
 - App Store Connect'te Paid Apps Agreement, banka ve vergi bilgisi tamamlanmadan ürünler satılamaz.
