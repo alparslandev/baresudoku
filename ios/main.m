@@ -1314,10 +1314,9 @@ static NSString *priceOf(NSString *identifier) {
 }
 
 - (void)offerSupportSoon {
-    if (supporter) return;
     [store load];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (!supporter && products[SUPPORTER_PRODUCT] && game.active && game.solved && pendingLevel < 0 && !statsOpen && !supportOpen) [self openSupport];
+        if (products[SUPPORTER_PRODUCT] && game.active && game.solved && pendingLevel < 0 && !statsOpen && !supportOpen) [self openSupport];
     });
 }
 
