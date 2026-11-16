@@ -34,7 +34,8 @@ ios/test.sh 30
 step "Surum"
 CODE=$(sed -n 's/.*android:versionCode="\([0-9]*\)".*/\1/p' android/AndroidManifest.xml)
 NEW=$((CODE + 1))
-VERSION="1.$((NEW - 1))"
+SECOND_FROM=14
+if [ "$NEW" -ge "$SECOND_FROM" ]; then VERSION="2.$((NEW - SECOND_FROM))"; else VERSION="1.$((NEW - 1))"; fi
 sed -i '' "s/android:versionCode=\"$CODE\"/android:versionCode=\"$NEW\"/; s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION\"/" android/AndroidManifest.xml
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" -c "Set :CFBundleShortVersionString $VERSION" ios/Info.plist
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW" -c "Set :CFBundleShortVersionString $VERSION" ios/Info-tv.plist

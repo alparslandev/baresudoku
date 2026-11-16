@@ -152,10 +152,10 @@ async function submit(version, build, platform) {
   await reviewDetail(vid, listing);
   if ((await versions(app, platform)).some(v => LIVE.has(state(v)) && v.id !== vid)) await setWhatsNew(vid);
   const open = (await api("GET", `/reviewSubmissions?filter[app]=${app}&filter[platform]=${platform}&filter[state]=READY_FOR_REVIEW`)).data[0];
+  if (open) for (const item of (await api("GET", `/reviewSubmissions/${open.id}/items`)).data) await api("DELETE", `/reviewSubmissionItems/${item.id}`);
   const sub = open ? open.id : (await api("POST", "/reviewSubmissions", {
     data: { type: "reviewSubmissions", attributes: { platform }, relationships: { app: { data: { type: "apps", id: app } } } },
   })).data.id;
-  if (platform === "IOS") await attachShop(app);
   await api("POST", "/reviewSubmissionItems", {
     data: {
       type: "reviewSubmissionItems",
@@ -165,6 +165,10 @@ async function submit(version, build, platform) {
       },
     },
   });
+  if (platform === "IOS" && !(await attachShop(app))) {
+    console.log(`App Store ${platform}: ${version} (${build}) gonderime hazir, gonderilmedi: ilk kalici urun yalniz surum sayfasindan secilir (App Store Connect > iOS ${version} > In-App Purchases and Subscriptions > urunleri sec > Add for Review > Submit for Review)`);
+    return;
+  }
   await api("PATCH", `/reviewSubmissions/${sub}`, { data: { type: "reviewSubmissions", id: sub, attributes: { submitted: true } } });
   console.log(`App Store ${platform}: ${version} (${build}) incelemeye gonderildi`);
 }
@@ -446,9 +450,16 @@ async function attachShop(app) {
     const item = listed.find(x => x.attributes.productId === product.id);
     if (!item) { console.log(`${product.id}: hesapta yok, gonderime girmedi`); continue; }
     if (item.attributes.state !== SHOP_READY) { console.log(`${product.id}: ${item.attributes.state}, gonderime eklenmedi`); continue; }
-    await api("POST", "/inAppPurchaseSubmissions", { data: { type: "inAppPurchaseSubmissions", relationships: { inAppPurchaseV2: { data: { type: "inAppPurchases", id: item.id } } } } });
-    console.log(`${product.id}: surumle birlikte incelemeye eklendi`);
+    try {
+      await api("POST", "/inAppPurchaseSubmissions", { data: { type: "inAppPurchaseSubmissions", relationships: { inAppPurchaseV2: { data: { type: "inAppPurchases", id: item.id } } } } });
+    } catch (e) {
+      if (!String(e.message).includes("MUST_BE_SUBMITTED_ON_VERSION")) throw e;
+      console.log(`${product.id}: ilk urun, API ile eklenemiyor`);
+      return false;
+    }
+    console.log(`${product.id}: incelemeye eklendi`);
   }
+  return true;
 }
 
 const [cmd, ...args] = process.argv.slice(2);
