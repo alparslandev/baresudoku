@@ -166,7 +166,7 @@ async function submit(version, build, platform) {
     },
   });
   if (platform === "IOS" && !(await attachShop(app))) {
-    console.log(`App Store ${platform}: ${version} (${build}) gonderime hazir, gonderilmedi: ilk kalici urun yalniz surum sayfasindan secilir (App Store Connect > iOS ${version} > In-App Purchases and Subscriptions > urunleri sec > Add for Review > Submit for Review)`);
+    console.log(`App Store ${platform}: ${version} (${build}) gonderime hazir, gonderilmedi: ilk kalici urun yalniz surum sayfasindan secilir (App Store Connect > iOS ${version} > Add for Review; Monetization > In-App Purchases > urunleri sec > Add for Review; Draft Submissions > Submit for Review)`);
     return;
   }
   await api("PATCH", `/reviewSubmissions/${sub}`, { data: { type: "reviewSubmissions", id: sub, attributes: { submitted: true } } });
