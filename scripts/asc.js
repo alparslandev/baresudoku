@@ -8,6 +8,43 @@ const STORE = new URL("../ios/store/", import.meta.url);
 const PLATFORM = { ios: "IOS", mac: "MAC_OS", tv: "TV_OS", vision: "VISION_OS" };
 const DISPLAY_TYPES = { IOS: ["APP_IPHONE_69", "APP_IPAD_PRO_3GEN_129"], MAC_OS: ["APP_DESKTOP"], TV_OS: ["APP_APPLE_TV"], VISION_OS: ["APP_APPLE_VISION_PRO"] };
 const FALLBACK_TYPE = { APP_IPHONE_69: "APP_IPHONE_67" };
+const API_V2 = "https://api.appstoreconnect.apple.com/v2";
+const SHOP = [
+  {
+    id: "com.baresudoku.supporter",
+    kind: "NON_CONSUMABLE",
+    label: "Supporter",
+    price: "2.99",
+    texts: { "en-US": { name: "Bare Sudoku Supporter", description: "Variants, color themes and the daily archive." }, tr: { name: "Bare Sudoku Destekçisi", description: "Varyantlar, renk temaları ve günlük arşiv." } },
+  },
+  {
+    id: "com.baresudoku.tip.small",
+    kind: "CONSUMABLE",
+    label: "Small Tip",
+    price: "0.99",
+    texts: { "en-US": { name: "Small Tip", description: "A small thank you for Bare Sudoku." }, tr: { name: "Küçük Bahşiş", description: "Bare Sudoku'ya küçük bir teşekkür." } },
+  },
+  {
+    id: "com.baresudoku.tip.medium",
+    kind: "CONSUMABLE",
+    label: "Medium Tip",
+    price: "2.99",
+    texts: { "en-US": { name: "Medium Tip", description: "A bigger thank you for Bare Sudoku." }, tr: { name: "Orta Bahşiş", description: "Bare Sudoku'ya büyük bir teşekkür." } },
+  },
+  {
+    id: "com.baresudoku.tip.large",
+    kind: "CONSUMABLE",
+    label: "Large Tip",
+    price: "4.99",
+    texts: { "en-US": { name: "Large Tip", description: "A huge thank you for Bare Sudoku." }, tr: { name: "Büyük Bahşiş", description: "Bare Sudoku'ya kocaman bir teşekkür." } },
+  },
+];
+const SHOP_BASE = "USA";
+const SHOP_LIMITS = { name: 30, description: 45 };
+const SHOP_SHOT = "inAppPurchaseAppStoreReviewScreenshots";
+const SHOP_SHOT_LEAST = { short: 640, long: 920 };
+const SHOP_READY = "READY_TO_SUBMIT";
+const FIRST_PRICE = "${price1}";
 const b64 = s => Buffer.from(s).toString("base64url");
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 let cfg;
@@ -118,6 +155,7 @@ async function submit(version, build, platform) {
   const sub = open ? open.id : (await api("POST", "/reviewSubmissions", {
     data: { type: "reviewSubmissions", attributes: { platform }, relationships: { app: { data: { type: "apps", id: app } } } },
   })).data.id;
+  if (platform === "IOS") await attachShop(app);
   await api("POST", "/reviewSubmissionItems", {
     data: {
       type: "reviewSubmissionItems",
@@ -257,12 +295,171 @@ async function metadata(version, platform) {
   console.log(`App Store ${platform}: ${version} icin metinler, kategori, yas derecesi, ekran goruntuleri ve inceleme bilgileri yuklendi. Elle kalan: App Privacy (Data Not Collected), fiyat (Free).`);
 }
 
+async function related(path) {
+  try {
+    return (await api("GET", path)).data;
+  } catch (e) {
+    if (String(e.message).includes(" 404: ")) return null;
+    throw e;
+  }
+}
+
+async function shopState(app) {
+  return (await api("GET", `/apps/${app}/inAppPurchasesV2?limit=200`)).data;
+}
+
+async function shopPages(item) {
+  return (await api("GET", `${API_V2}/inAppPurchases/${item.id}/inAppPurchaseLocalizations?limit=200`)).data;
+}
+
+async function shopPrices(item) {
+  let listed;
+  try {
+    listed = await api("GET", `/inAppPurchasePriceSchedules/${item.id}/manualPrices?include=inAppPurchasePricePoint,territory&limit=50`);
+  } catch (e) {
+    if (String(e.message).includes(" 404: ")) return [];
+    throw e;
+  }
+  const points = new Map((listed.included || []).filter(x => x.type === "inAppPurchasePricePoints").map(x => [x.id, x.attributes.customerPrice]));
+  return listed.data.map(p => `${p.relationships?.territory?.data?.id || "?"} ${points.get(p.relationships?.inAppPurchasePricePoint?.data?.id) || "?"}`);
+}
+
+async function shopReach(item) {
+  const reach = await related(`${API_V2}/inAppPurchases/${item.id}/inAppPurchaseAvailability`);
+  if (!reach) return null;
+  const places = await api("GET", `/inAppPurchaseAvailabilities/${reach.id}/availableTerritories?limit=200`);
+  return { count: places.meta?.paging?.total ?? places.data.length, future: reach.attributes.availableInNewTerritories };
+}
+
+async function shopShot(item) {
+  return related(`${API_V2}/inAppPurchases/${item.id}/appStoreReviewScreenshot`);
+}
+
+async function shop() {
+  const listed = await shopState(await appId());
+  for (const product of SHOP) {
+    const item = listed.find(x => x.attributes.productId === product.id);
+    if (!item) { console.log(`urun ${product.id}: yok`); continue; }
+    console.log(`urun ${product.id}: ${item.attributes.name}, ${item.attributes.inAppPurchaseType}, ${item.attributes.state}`);
+    console.log(`  metin: ${(await shopPages(item)).map(p => `${p.attributes.locale} "${p.attributes.name}" / "${p.attributes.description}"`).join(", ") || "yok"}`);
+    console.log(`  fiyat: ${(await shopPrices(item)).join(", ") || "yok"} (beklenen ${SHOP_BASE} ${product.price})`);
+    const reach = await shopReach(item);
+    console.log(`  satis yeri: ${reach ? `${reach.count} bolge, yeni bolgeler ${reach.future ? "dahil" : "haric"}` : "yok"}`);
+    const shot = await shopShot(item);
+    console.log(`  inceleme resmi: ${shot ? `${shot.attributes.fileName} ${shot.attributes.fileSize} bayt, ${shot.attributes.assetDeliveryState?.state || "?"}` : "yok"}`);
+  }
+}
+
+async function openShop() {
+  for (const product of SHOP) {
+    for (const [locale, words] of Object.entries(product.texts)) {
+      for (const [field, limit] of Object.entries(SHOP_LIMITS)) {
+        if ([...words[field]].length > limit) throw new Error(`${product.id} (${locale}): ${field} ${[...words[field]].length} karakter, sinir ${limit}`);
+      }
+    }
+  }
+  const app = await appId();
+  const listed = await shopState(app);
+  const places = (await api("GET", "/territories?limit=200")).data.map(p => ({ type: "territories", id: p.id }));
+  for (const product of SHOP) {
+    let item = listed.find(x => x.attributes.productId === product.id);
+    if (item) console.log(`urun zaten var: ${product.id}`);
+    else {
+      item = (await api("POST", `${API_V2}/inAppPurchases`, {
+        data: { type: "inAppPurchases", attributes: { name: product.label, productId: product.id, inAppPurchaseType: product.kind }, relationships: { app: { data: { type: "apps", id: app } } } },
+      })).data;
+      console.log(`urun acildi: ${product.id}`);
+    }
+    const link = { data: { type: "inAppPurchases", id: item.id } };
+    const pages = await shopPages(item);
+    for (const [locale, words] of Object.entries(product.texts)) {
+      if (pages.some(p => p.attributes.locale === locale)) console.log(`${product.id} (${locale}): metin zaten var`);
+      else {
+        await api("POST", "/inAppPurchaseLocalizations", { data: { type: "inAppPurchaseLocalizations", attributes: { locale, ...words }, relationships: { inAppPurchaseV2: link } } });
+        console.log(`${product.id} (${locale}): metin eklendi`);
+      }
+    }
+    if ((await shopPrices(item)).length) console.log(`${product.id}: fiyat zaten var`);
+    else {
+      const points = (await api("GET", `${API_V2}/inAppPurchases/${item.id}/pricePoints?filter[territory]=${SHOP_BASE}&limit=8000`)).data;
+      const point = points.find(p => p.attributes.customerPrice === product.price);
+      if (!point) throw new Error(`${product.id}: ${SHOP_BASE} icin ${product.price} fiyat basamagi yok`);
+      await api("POST", "/inAppPurchasePriceSchedules", {
+        data: {
+          type: "inAppPurchasePriceSchedules",
+          relationships: { inAppPurchase: link, baseTerritory: { data: { type: "territories", id: SHOP_BASE } }, manualPrices: { data: [{ type: "inAppPurchasePrices", id: FIRST_PRICE }] } },
+        },
+        included: [{ type: "inAppPurchasePrices", id: FIRST_PRICE, attributes: { startDate: null }, relationships: { inAppPurchaseV2: link, inAppPurchasePricePoint: { data: { type: "inAppPurchasePricePoints", id: point.id } } } }],
+      });
+      console.log(`${product.id}: fiyat ${SHOP_BASE} ${product.price}`);
+    }
+    if (await shopReach(item)) console.log(`${product.id}: satis yeri zaten var`);
+    else {
+      await api("POST", "/inAppPurchaseAvailabilities", { data: { type: "inAppPurchaseAvailabilities", attributes: { availableInNewTerritories: true }, relationships: { inAppPurchase: link, availableTerritories: { data: places } } } });
+      console.log(`${product.id}: ${places.length} bolgede satisa acildi`);
+    }
+  }
+}
+
+function shotFile(path) {
+  const bytes = readFileSync(path);
+  if (bytes.subarray(1, 4).toString() !== "PNG") throw new Error(`${path}: PNG degil`);
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (Math.min(width, height) < SHOP_SHOT_LEAST.short || Math.max(width, height) < SHOP_SHOT_LEAST.long) throw new Error(`${path}: ${width}x${height} kucuk`);
+  return { fileName: basename(path), bytes, checksum: createHash("md5").update(bytes).digest("hex"), width, height };
+}
+
+async function shopShots(path) {
+  const file = shotFile(path);
+  const listed = await shopState(await appId());
+  for (const product of SHOP) {
+    const item = listed.find(x => x.attributes.productId === product.id);
+    if (!item) throw new Error(`urun yok: ${product.id}; once: bun scripts/asc.js shop open`);
+    const old = await shopShot(item);
+    if (old && old.attributes.sourceFileChecksum === file.checksum && old.attributes.assetDeliveryState?.state === "COMPLETE") {
+      console.log(`${product.id} inceleme resmi: zaten ayni`);
+      continue;
+    }
+    if (old) await api("DELETE", `/${SHOP_SHOT}/${old.id}`);
+    const shot = (await api("POST", `/${SHOP_SHOT}`, { data: { type: SHOP_SHOT, attributes: { fileName: file.fileName, fileSize: file.bytes.length }, relationships: { inAppPurchaseV2: { data: { type: "inAppPurchases", id: item.id } } } } })).data;
+    for (const op of shot.attributes.uploadOperations) {
+      const headers = {};
+      for (const h of op.requestHeaders) headers[h.name] = h.value;
+      const r = await fetch(op.url, { method: op.method, headers, body: file.bytes.subarray(op.offset, op.offset + op.length) });
+      if (!r.ok) throw new Error(`inceleme resmi yuklenemedi ${r.status}: ${await r.text()}`);
+    }
+    await api("PATCH", `/${SHOP_SHOT}/${shot.id}`, { data: { type: SHOP_SHOT, id: shot.id, attributes: { uploaded: true, sourceFileChecksum: file.checksum } } });
+    for (let i = 0; i < 40; i++) {
+      const state = (await api("GET", `/${SHOP_SHOT}/${shot.id}`)).data.attributes.assetDeliveryState?.state;
+      if (state === "COMPLETE") break;
+      if (state === "FAILED") throw new Error(`${product.id} inceleme resmi islenemedi`);
+      await sleep(3000);
+    }
+    console.log(`${product.id} inceleme resmi: ${file.width}x${file.height} yuklendi`);
+  }
+}
+
+async function attachShop(app) {
+  const listed = await shopState(app);
+  for (const product of SHOP) {
+    const item = listed.find(x => x.attributes.productId === product.id);
+    if (!item) { console.log(`${product.id}: hesapta yok, gonderime girmedi`); continue; }
+    if (item.attributes.state !== SHOP_READY) { console.log(`${product.id}: ${item.attributes.state}, gonderime eklenmedi`); continue; }
+    await api("POST", "/inAppPurchaseSubmissions", { data: { type: "inAppPurchaseSubmissions", relationships: { inAppPurchaseV2: { data: { type: "inAppPurchases", id: item.id } } } } });
+    console.log(`${product.id}: surumle birlikte incelemeye eklendi`);
+  }
+}
+
 const [cmd, ...args] = process.argv.slice(2);
 const platform = PLATFORM[args[cmd === "submit" ? 2 : 1] || "ios"];
 if (cmd === "submit" && args.length >= 2 && platform) await submit(args[0], args[1], platform);
 else if (cmd === "metadata" && args.length >= 1 && platform) await metadata(args[0], platform);
 else if (cmd === "review" && args.length >= 1 && platform) await review(args[0], platform);
+else if (cmd === "shop" && args[0] === "open") await openShop();
+else if (cmd === "shop" && args[0] === "shots" && args[1]) await shopShots(args[1]);
+else if (cmd === "shop" && !args.length) await shop();
 else {
-  console.error("kullanim: bun scripts/asc.js submit <surum> <derleme> [ios|mac|tv|vision] | metadata <surum> [ios|mac|tv|vision] | review <surum> [ios|mac|tv|vision]");
+  console.error("kullanim: bun scripts/asc.js submit <surum> <derleme> [ios|mac|tv|vision] | metadata <surum> [ios|mac|tv|vision] | review <surum> [ios|mac|tv|vision] | shop [open | shots <png>]");
   process.exit(1);
 }
