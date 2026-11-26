@@ -21,6 +21,7 @@ public class MainActivity extends Activity implements Runnable {
     static String dailyDate = "";
     static boolean dailyMenu;
     static boolean showTimer = true;
+    static int theme;
     static boolean recorded;
     static boolean reviewOffered;
 
@@ -35,6 +36,7 @@ public class MainActivity extends Activity implements Runnable {
             dailyDate = game.active ? prefs.getString("dd", "") : "";
             dailyMenu = !dailyDate.isEmpty();
             showTimer = !"0".equals(prefs.getString("t", "1"));
+            theme = Math.max(0, Math.min(BoardView.THEMES - 1, prefs.getInt("th", 0)));
             recorded = game.solved;
             if (game.active) rateSaved();
         }

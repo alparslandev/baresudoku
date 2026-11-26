@@ -59,6 +59,13 @@ final class BoardView extends View implements Runnable {
     static final int S_COLOR = S_MASTER + 11;
     static final int S_CORNER = S_MASTER + 12;
     static final int S_RATE = S_MASTER + 13;
+    static final int S_THEME = S_MASTER + 14;
+    static final int S_THEME_NAME = S_MASTER + 15;
+    static final int THEMES = 4;
+    static final int[][] THEME_LIGHT = {{0xFF1A73E8, 0xFFD2E3FC, 0xFFAECBFA, 0xFFEEF3FC}, {0xFF188038, 0xFFCEEAD6, 0xFFA8DAB5, 0xFFEEF7F0},
+        {0xFF8430CE, 0xFFE9D2FD, 0xFFD7AEFB, 0xFFF6EEFC}, {0xFF00796B, 0xFFC8EBE7, 0xFF9ED9D1, 0xFFEDF7F6}};
+    static final int[][] THEME_DARK = {{0xFF8AB4F8, 0xFF2B3A55, 0xFF3B5A8A, 0xFF1E2430}, {0xFF81C995, 0xFF24402E, 0xFF2F5E3F, 0xFF1C2620},
+        {0xFFC58AF9, 0xFF3A2B55, 0xFF553B8A, 0xFF241E30}, {0xFF6FD3C6, 0xFF1F4541, 0xFF2A615B, 0xFF1A2726}};
     static final int[] PALETTE_LIGHT = {0, 0xFFFFF1A8, 0xFFC8EFC4, 0xFFC4E0FF, 0xFFFFD0E6, 0xFFFFD6AC, 0xFFDDD0FF};
     static final int[] PALETTE_DARK = {0, 0xFF4D4418, 0xFF1F4526, 0xFF1D3A59, 0xFF55223D, 0xFF573616, 0xFF3A2C59};
     static final int TOOLS = 6;
@@ -78,7 +85,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Master",
         "Daily Sudoku", "Share", "Play Sudoku", "Statistics", "Solved", "Best time", "Average time", "Daily streak",
-        "Explain", "Show timer", "Color", "Corner", "★ Rate Bare Sudoku"};
+        "Explain", "Show timer", "Color", "Corner", "★ Rate Bare Sudoku", "Theme", "Blue", "Green", "Purple", "Teal"};
     static final String[] TR = {"Kolay", "Orta", "Zor", "Uzman", "Geri al", "Sil", "Not", "Notları doldur", "İpucu",
         "Yeni oyun", "Yanlışları göster", "Açık", "Kapalı", "Vazgeç", "Tebrikler!", "Hazırlanıyor…", "Bu rakam yanlış",
         "Bu hücrede tek aday: #", "Bu satırda # için tek yer", "Bu sütunda # için tek yer",
@@ -93,7 +100,7 @@ final class BoardView extends View implements Runnable {
         "Nishio Forcing Chain", "Cell Forcing Chain", "Unit Forcing Chain", "Dynamic Forcing Net",
         "Nested Forcing Net", "Sashimi X-Wing", "Sashimi Swordfish", "Sashimi Jellyfish", "Usta",
         "Günlük Sudoku", "Paylaş", "Sudoku oyna", "İstatistik", "Çözülen", "En iyi süre", "Ortalama süre", "Günlük seri",
-        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "★ Bare Sudoku'yu değerlendir"};
+        "Açıkla", "Zamanlayıcıyı göster", "Renk", "Köşe", "★ Bare Sudoku'yu değerlendir", "Tema", "Mavi", "Yeşil", "Mor", "Camgöbeği"};
     static final String[] DIGITS = {"", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     final MainActivity host;
@@ -167,18 +174,13 @@ final class BoardView extends View implements Runnable {
             cLine = 0xFF3A3A3A;
             cThick = 0xFFB0B0B0;
             cGiven = 0xFFF0F0F0;
-            cEntered = 0xFF8AB4F8;
             cWrong = 0xFFF28B82;
             cNote = 0xFFA0A0A0;
-            cUnit = 0xFF1E2430;
-            cSame = 0xFF2B3A55;
-            cSelected = 0xFF3B5A8A;
             cKey = 0xFF1F1F1F;
             cKeyText = 0xFFF0F0F0;
             cMuted = 0xFF707070;
             cPanel = 0xFF1F1F1F;
             cDim = 0x99000000;
-            cAccent = 0xFF8AB4F8;
             cCorner = 0xFFFFAB70;
             palette = PALETTE_DARK;
         } else {
@@ -186,23 +188,27 @@ final class BoardView extends View implements Runnable {
             cLine = 0xFFD0D0D0;
             cThick = 0xFF303030;
             cGiven = 0xFF202124;
-            cEntered = 0xFF1A73E8;
             cWrong = 0xFFD93025;
             cNote = 0xFF5F6368;
-            cUnit = 0xFFEEF3FC;
-            cSame = 0xFFD2E3FC;
-            cSelected = 0xFFAECBFA;
             cKey = 0xFFF1F3F4;
             cKeyText = 0xFF202124;
             cMuted = 0xFF9AA0A6;
             cPanel = 0xFFFFFFFF;
             cDim = 0x66000000;
-            cAccent = 0xFF1A73E8;
             cCorner = 0xFFC2410C;
             palette = PALETTE_LIGHT;
         }
+        applyTheme();
         menuOpen = !game.active && MainActivity.pendingLevel < 0;
         wasGenerating = MainActivity.pendingLevel >= 0;
+    }
+
+    void applyTheme() {
+        int[] tone = (dark ? THEME_DARK : THEME_LIGHT)[MainActivity.theme];
+        cEntered = cAccent = tone[0];
+        cSame = tone[1];
+        cSelected = tone[2];
+        cUnit = tone[3];
     }
 
     static String clock(long ms) {
@@ -716,7 +722,7 @@ final class BoardView extends View implements Runnable {
     private int[][] buildMenuSpec() {
         boolean solved = game.active && game.solved;
         boolean rate = solved && MainActivity.reviewOffered;
-        int n = (solved ? 1 : 0) + (rate ? 1 : 0) + 7 + (cancellable() ? 2 : 0);
+        int n = (solved ? 1 : 0) + (rate ? 1 : 0) + 8 + (cancellable() ? 2 : 0);
         int[][] rows = new int[n][];
         int k = 0;
         if (rate) rows[k++] = new int[] {413};
@@ -724,6 +730,7 @@ final class BoardView extends View implements Runnable {
         for (int level = 0; level < 5; level++) rows[k++] = new int[] {400 + level};
         rows[k++] = new int[] {405, 408};
         rows[k++] = new int[] {409, 411};
+        rows[k++] = new int[] {441};
         if (cancellable()) {
             rows[k++] = new int[] {406};
             rows[k++] = new int[] {407};
@@ -800,7 +807,7 @@ final class BoardView extends View implements Runnable {
                 RectF r = menuItemRect(row, item);
                 String label = menuLabel(menuSpec[row][item]);
                 fillRect(c, r.left, r.top + inset, r.right, r.bottom - inset, cKey, menuRowH * 0.25f);
-                drawText(c, label, r.centerX(), r.centerY(), fit(label, menuRowH * 0.4f, r.width() * 0.9f), cKeyText, Typeface.DEFAULT);
+                drawText(c, label, r.centerX(), r.centerY(), fit(label, menuRowH * 0.4f, r.width() * 0.9f), menuSpec[row][item] == 441 ? cAccent : cKeyText, Typeface.DEFAULT);
             }
         }
     }
@@ -830,6 +837,12 @@ final class BoardView extends View implements Runnable {
             invalidate();
         } else if (t == 409) {
             MainActivity.dailyMenu = !MainActivity.dailyMenu;
+            invalidate();
+            sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
+        } else if (t == 441) {
+            MainActivity.theme = (MainActivity.theme + 1) % THEMES;
+            MainActivity.prefs.edit().putInt("th", MainActivity.theme).apply();
+            applyTheme();
             invalidate();
             sendAccessibilityEvent(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
         } else if (t == 411) {
@@ -982,6 +995,7 @@ final class BoardView extends View implements Runnable {
         if (id == 411) return text[S_STATS];
         if (id == 412) return text[S_SHARE];
         if (id == 413) return text[S_RATE];
+        if (id == 441) return text[S_THEME] + ": " + text[S_THEME_NAME + MainActivity.theme];
         return text[id == 406 ? S_RESTART : S_CANCEL];
     }
 
