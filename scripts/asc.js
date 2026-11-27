@@ -126,7 +126,7 @@ async function localizations(vid) {
 async function setWhatsNew(vid) {
   const notes = JSON.parse(readFileSync(new URL("../release-notes.json", import.meta.url), "utf8"));
   for (const loc of await localizations(vid)) {
-    const text = notes[loc.attributes.locale.split("-")[0]];
+    const text = notes[loc.attributes.locale.split("-")[0]] || notes.en;
     if (text) await api("PATCH", `/appStoreVersionLocalizations/${loc.id}`, { data: { type: "appStoreVersionLocalizations", id: loc.id, attributes: { whatsNew: text } } });
   }
 }
@@ -284,8 +284,8 @@ async function metadata(version, platform) {
   const listing = JSON.parse(readFileSync(new URL("listing.json", STORE), "utf8"));
   const app = await appId();
   await api("PATCH", `/apps/${app}`, { data: { type: "apps", id: app, attributes: { contentRightsDeclaration: "DOES_NOT_USE_THIRD_PARTY_CONTENT" } } });
-  await appInfo(app, listing);
   const vid = await versionFor(app, platform, version);
+  await appInfo(app, listing);
   await setCopyright(vid, listing);
   const locs = await localizations(vid);
   for (const [locale, l] of Object.entries(listing.locales)) {
