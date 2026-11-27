@@ -3,9 +3,9 @@
   "copyright": "2026 Alparslan Selçuk Develioğlu",
   "locales": {
     "en-US": {
-      "name": "Bare Sudoku",
-      "subtitle": "No ads, no account, offline",
-      "keywords": "sudoku,puzzle,logic,no ads,free,offline,brain,numbers,game,killer",
+      "name": "Bare Sudoku: No Ads",
+      "subtitle": "Offline, no account, hints",
+      "keywords": "classic,puzzle,free,ad,daily,brain,number,game,logic,killer,easy,expert,master,math,wifi,without",
       "supportUrl": "https://baresudoku.com/",
       "marketingUrl": "https://baresudoku.com/",
       "privacyPolicyUrl": "https://baresudoku.com/privacy/",
@@ -13,10 +13,21 @@
       "description": "Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet. Open it and play.\n\nFIVE LEVELS\nEasy, Medium, Hard, Expert and Master. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess. The puzzle's difficulty rating is shown next to the level name.\n\nHINTS THAT TEACH\nA hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, fish and wing patterns such as X-Wing and Y-Wing, and at Master level chains, almost locked sets and forcing nets. Tap again to place the digit.\n\nFAST INPUT\nTap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.\n\nSMALL AND HONEST\nThe whole app is about 150 KB. Your game is saved on the device and continues where you left off. Dark mode, landscape, English and Turkish. Open source under the MIT license.",
       "privacyPolicyText": "Bare Sudoku stores no personal data: no account, no cookies, no IP addresses. Your current game is saved only on your device. The site keeps anonymous counters (page opens, games started and finished, level, language, device type and referring site), and the totals are public at baresudoku.com/stats/. The Android app has no internet permission at all.\n\nThis policy covers the web game at baresudoku.com, the Android app and the Apple apps (iPhone, iPad, Mac, Apple TV and Apple Vision Pro). None of them shows ads or asks for personal data. The web game sends only the anonymous counters described above, to baresudoku.com itself; the apps do not connect to the internet at all. Questions: open an issue on GitHub, github.com/alparslandev/baresudoku."
     },
+    "es-MX": {
+      "name": "Bare Sudoku: No Ads",
+      "subtitle": "Classic daily puzzle, no wifi",
+      "keywords": "hard,simple,relax,calm,zen,notes,pencil,9x9,mini,diagonal,beginner,sodoku,sin,anuncios,gratis,juego",
+      "supportUrl": "https://baresudoku.com/es/",
+      "marketingUrl": "https://baresudoku.com/es/",
+      "privacyPolicyUrl": "https://baresudoku.com/es/privacy/",
+      "promotionalText": "Every classic puzzle is free, with no ads and no account. The only purchases are optional support: tips, and a Supporter pack that adds variants, themes and the archive.",
+      "description": "Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet. Open it and play.\n\nFIVE LEVELS\nEasy, Medium, Hard, Expert and Master. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess. The puzzle's difficulty rating is shown next to the level name.\n\nHINTS THAT TEACH\nA hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, fish and wing patterns such as X-Wing and Y-Wing, and at Master level chains, almost locked sets and forcing nets. Tap again to place the digit.\n\nFAST INPUT\nTap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.\n\nSMALL AND HONEST\nThe whole app is about 150 KB. Your game is saved on the device and continues where you left off. Dark mode, landscape, English and Turkish. Open source under the MIT license.",
+      "privacyPolicyText": "Bare Sudoku stores no personal data: no account, no cookies, no IP addresses. Your current game is saved only on your device. The site keeps anonymous counters (page opens, games started and finished, level, language, device type and referring site), and the totals are public at baresudoku.com/stats/. The Android app has no internet permission at all.\n\nThis policy covers the web game at baresudoku.com, the Android app and the Apple apps (iPhone, iPad, Mac, Apple TV and Apple Vision Pro). None of them shows ads or asks for personal data. The web game sends only the anonymous counters described above, to baresudoku.com itself; the apps do not connect to the internet at all. Questions: open an issue on GitHub, github.com/alparslandev/baresudoku."
+    },
     "tr": {
-      "name": "Bare Sudoku",
-      "subtitle": "Reklamsız, çevrimdışı sudoku",
-      "keywords": "sudoku,bulmaca,mantık,reklamsız,ücretsiz,çevrimdışı,zeka,sayı,oyun",
+      "name": "Bare Sudoku: Reklamsız",
+      "subtitle": "İnternetsiz, hesapsız, ipuçlu",
+      "keywords": "klasik,bulmaca,ücretsiz,çevrimdışı,günlük,zeka,sayı,oyun,mantık,killer,kolay,zor,uzman,matematik",
       "supportUrl": "https://baresudoku.com/tr/",
       "marketingUrl": "https://baresudoku.com/tr/",
       "privacyPolicyUrl": "https://baresudoku.com/tr/privacy/",
@@ -27,18 +38,18 @@
   },
   "screenshots": {
     "APP_IPHONE_69": [
-      "1-board.png",
-      "2-digit-first.png",
-      "3-hint.png",
-      "4-menu.png",
-      "5-dark.png"
+      "cap-1-noads.png",
+      "cap-2-hints.png",
+      "cap-3-lock.png",
+      "cap-4-levels.png",
+      "cap-5-dark.png"
     ],
     "APP_IPAD_PRO_3GEN_129": [
-      "ipad-1-board.png",
-      "ipad-2-lock.png",
-      "ipad-3-hint.png",
-      "ipad-4-menu.png",
-      "ipad-5-dark.png"
+      "cap-ipad-1-noads.png",
+      "cap-ipad-2-hints.png",
+      "cap-ipad-3-lock.png",
+      "cap-ipad-4-levels.png",
+      "cap-ipad-5-dark.png"
     ],
     "APP_DESKTOP": [
       "mac-1-board.png",
