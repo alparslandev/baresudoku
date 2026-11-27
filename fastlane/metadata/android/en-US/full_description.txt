@@ -1,13 +1,16 @@
-Bare Sudoku is Sudoku with nothing in the way. No ads, no account, no tracking, no internet permission. Open it and play.
+Bare Sudoku is classic 9x9 Sudoku with nothing in the way. No ads, no account, no tracking, no internet permission. It works offline, without wifi. Open it and play.
 
 FIVE LEVELS
 Easy, Medium, Hard, Expert and Master. Every puzzle has exactly one solution and can be solved by logic alone; you never have to guess. The puzzle's difficulty rating is shown next to the level name.
+
+DAILY SUDOKU
+A new daily puzzle for each level every day. Build a daily streak, share your result, and follow your solved count, best time and average time in the statistics.
 
 HINTS THAT TEACH
 A hint points to the next cell you can fill and names the technique: a single candidate, the only place for a digit in a row, column or box, locked candidates, pairs and triples, fish and wing patterns such as X-Wing and Y-Wing, and at Master level chains, almost locked sets and forcing nets. Tap again to place the digit.
 
 FAST INPUT
-Tap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes, undo, erase, fill all notes with one tap, mistake marking you can turn off, and highlights for the row, column, box and same digits.
+Tap a cell then a digit, or tap a digit twice to lock it and fill several cells in a row. Notes in the center or the corner, cell colors, undo, erase, fill all notes with one tap, mistake marking you can turn off, a timer you can hide, and highlights for the row, column, box and same digits.
 
 SMALL AND HONEST
-The whole app is about 25 KB, smaller than this page. No permissions at all. Your game is saved on the device and continues where you left off. Dark mode, landscape, English and Turkish. Open source under the MIT license: github.com/alparslandev/baresudoku
+The whole app is about 50 KB, smaller than a single photo. No permissions at all. Your game is saved on the device and continues where you left off. Dark mode, four color themes, landscape, English and Turkish. Open source under the MIT license: github.com/alparslandev/baresudoku
