@@ -82,7 +82,7 @@ const RETRYABLE = /draft app|precondition/i;
 
 async function release(aab, version, track) {
   const attempts = [[track, "completed"], [track, "draft"]];
-  for (const fallback of ["alpha", "internal"]) if (fallback !== track) attempts.push([fallback, "draft"]);
+  for (const fallback of ["alpha", "internal"]) if (fallback !== track) attempts.push([fallback, "completed"], [fallback, "draft"]);
   let last;
   for (const [t, status] of attempts) {
     try {
