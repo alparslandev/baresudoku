@@ -14,7 +14,7 @@ const SHOP = [
     id: "com.baresudoku.supporter",
     kind: "NON_CONSUMABLE",
     label: "Supporter",
-    price: "2.99",
+    price: "4.99",
     texts: { "en-US": { name: "Bare Sudoku Supporter", description: "Variants, color themes and the daily archive." }, tr: { name: "Bare Sudoku Destekçisi", description: "Varyantlar, renk temaları ve günlük arşiv." } },
   },
   {
