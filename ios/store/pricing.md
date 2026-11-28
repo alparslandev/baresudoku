@@ -52,7 +52,7 @@ Soru: iOS (ve aynı kayıttaki macOS, tvOS, visionOS) tek seferlik X dolara sat�
 - Satın almayan oyuncu için tek değişiklik menüdeki "♥ Destek ol" satırı; açılır pencere ya da hatırlatma yok.
 - App Store Connect'te Paid Apps Agreement, banka ve vergi bilgisi tamamlanmadan ürünler satılamaz.
 
-## Destekçi fiyatı 4,99 USD (2026-11-28)
-- Destekçi 2,99 USD'den 4,99 USD'ye çıktı (ABD taban fiyat, öbür ülkeler Apple'ın otomatik eşitlemesiyle: Türkiye 249,99 TL, 3 Aralık'tan 299,99 TL; Almanya 5,99 EUR; İngiltere 4,99 GBP). Bahşişler aynı: 0,99, 2,99, 4,99.
-- Neden: 2,99'luk Destekçi varyantları, temaları ve arşivi açarken hiçbir şey vermeyen büyük bahşiş 4,99'du. 17-26 Kasım satışları: 9 Destekçi, 13 bahşiş (2 küçük, 7 orta, 4 büyük); yani 11 kişi karşılıksız 2,99 ya da 4,99 verdi. 4,99 oyuncuların gerçekten ödediği en yüksek fiyat, üstü için veri yok.
-- Ölçüm: fiyat değişmeden önceki 10 günde Destekçi günde 0,9 adet. Gelir aynı kalsın diye 4,99'da satışın en az yüzde 60'ı (günde 0,54) sürmeli. Aralık ortasında satış raporuyla yeniden bak.
+## Fiyat merdiveni: Destekçi 19,99 USD (2026-11-28)
+- Fiyatlar (ABD taban, öbür ülkeler Apple'ın otomatik eşitlemesiyle): Destekçi 19,99 (önce 2,99; aynı gün birkaç saat 4,99), büyük bahşiş 9,99 (önce 4,99), orta bahşiş 4,99 (önce 2,99), küçük bahşiş 0,99. Türkiye bugün 999,99 / 499,99 / 249,99 TL; Apple 3 Aralık'ta Türkiye'yi 1.299,99 / 599,99 / 299,99 TL yapıyor.
+- Neden (Alp: "destek adı üstünde bi kahveden fazlasıdır", "büyük bağış ile desteğin aynı olması hala abes", "belki daha az insan satın alacak ama miktar artacak"): 2,99'luk Destekçi varyantları, temaları ve arşivi açarken karşılıksız büyük bahşiş 4,99'du. 17-26 Kasım satışları: 9 Destekçi, 13 bahşiş (2 küçük, 7 orta, 4 büyük); bahşiş verenlerin 13'te 4'ü en üst basamağı seçti (tavan alçak), 2-4 kişi aynı hafta iki kez ödedi. Destekçi artık her bahşişten pahalı, büyük bahşiş onun yarısı.
+- Ölçüm: 2,99'da Destekçi ayda yaklaşık 27 adet, brüt 80 USD idi; 19,99'da ayda 4 satış aynı parayı getirir. Aralık ortasında satış raporuyla bak (`com.baresudoku.supporter` ve `tip.*` adetleri, ülke ve cihaz).
