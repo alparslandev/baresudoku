@@ -51,3 +51,8 @@ Soru: iOS (ve aynı kayıttaki macOS, tvOS, visionOS) tek seferlik X dolara sat�
 - Ürünler: `com.baresudoku.supporter` (tüketilmeyen; Killer, Diagonal ve Mini 6x6 varyantları, renk temaları ve 2025-01-01'den başlayan günlük arşiv), `com.baresudoku.tip.small`, `com.baresudoku.tip.medium`, `com.baresudoku.tip.large` (tüketilen bahşiş).
 - Satın almayan oyuncu için tek değişiklik menüdeki "♥ Destek ol" satırı; açılır pencere ya da hatırlatma yok.
 - App Store Connect'te Paid Apps Agreement, banka ve vergi bilgisi tamamlanmadan ürünler satılamaz.
+
+## Destekçi fiyatı 4,99 USD (2026-11-28)
+- Destekçi 2,99 USD'den 4,99 USD'ye çıktı (ABD taban fiyat, öbür ülkeler Apple'ın otomatik eşitlemesiyle: Türkiye 249,99 TL, 3 Aralık'tan 299,99 TL; Almanya 5,99 EUR; İngiltere 4,99 GBP). Bahşişler aynı: 0,99, 2,99, 4,99.
+- Neden: 2,99'luk Destekçi varyantları, temaları ve arşivi açarken hiçbir şey vermeyen büyük bahşiş 4,99'du. 17-26 Kasım satışları: 9 Destekçi, 13 bahşiş (2 küçük, 7 orta, 4 büyük); yani 11 kişi karşılıksız 2,99 ya da 4,99 verdi. 4,99 oyuncuların gerçekten ödediği en yüksek fiyat, üstü için veri yok.
+- Ölçüm: fiyat değişmeden önceki 10 günde Destekçi günde 0,9 adet. Gelir aynı kalsın diye 4,99'da satışın en az yüzde 60'ı (günde 0,54) sürmeli. Aralık ortasında satış raporuyla yeniden bak.
