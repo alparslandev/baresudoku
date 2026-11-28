@@ -14,7 +14,7 @@ const SHOP = [
     id: "com.baresudoku.supporter",
     kind: "NON_CONSUMABLE",
     label: "Supporter",
-    price: "4.99",
+    price: "19.99",
     texts: { "en-US": { name: "Bare Sudoku Supporter", description: "Variants, color themes and the daily archive." }, tr: { name: "Bare Sudoku Destekçisi", description: "Varyantlar, renk temaları ve günlük arşiv." } },
   },
   {
@@ -28,14 +28,14 @@ const SHOP = [
     id: "com.baresudoku.tip.medium",
     kind: "CONSUMABLE",
     label: "Medium Tip",
-    price: "2.99",
+    price: "4.99",
     texts: { "en-US": { name: "Medium Tip", description: "A bigger thank you for Bare Sudoku." }, tr: { name: "Orta Bahşiş", description: "Bare Sudoku'ya büyük bir teşekkür." } },
   },
   {
     id: "com.baresudoku.tip.large",
     kind: "CONSUMABLE",
     label: "Large Tip",
-    price: "4.99",
+    price: "9.99",
     texts: { "en-US": { name: "Large Tip", description: "A huge thank you for Bare Sudoku." }, tr: { name: "Büyük Bahşiş", description: "Bare Sudoku'ya kocaman bir teşekkür." } },
   },
 ];
